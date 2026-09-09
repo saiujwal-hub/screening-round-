@@ -19,6 +19,8 @@ def create_submission_package(team_name="powernext-alpha", output_dir="."):
     notebook_file = "solution_notebook.ipynb"
     methodology_file = "methodology_note.md"
     files_to_pack = [csv_file, summary_file, script_file, notebook_file, methodology_file]
+    if os.path.exists(os.path.join(output_dir, "task1_regime_vs_anomaly.png")):
+        files_to_pack.append("task1_regime_vs_anomaly.png")
     if os.path.exists(os.path.join(output_dir, "methodology_note.pdf")):
         files_to_pack.append("methodology_note.pdf")
 

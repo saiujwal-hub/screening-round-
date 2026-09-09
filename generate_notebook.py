@@ -227,6 +227,144 @@ print("Test Data Validity Distribution:")
 print(df_test['Validity_Label'].value_counts())
 """))
 
+# Section 2.3: Visualizing the Core Insight: Genuine Operating Regime Shift vs. Anomaly Points
+cells.append(nbf.v4.new_markdown_cell("""### 2.3 Visualizing the Core Insight: Genuine Operating Regime Shift vs. Anomaly Points
+A critical insight for Task 1 is that **high operating load ($I > 85\\text{ A}$) follows the deterministic physical heating curve rather than an anomaly, whereas true anomalies (sensor spikes, dropouts, duplicates) are scattered completely independent of load level.**
+
+Below, we visualize this core insight across all training records:
+- **Panel (A)**: Thermal Response Curve ($S_1$ vs. $I$) illustrating the continuous physical conduction band, highlighted genuine high-current regime shift ($I > 85\\text{ A}$), and anomalous outliers.
+- **Panel (B)**: Conduction Residual ($|S_1 - \\hat{S}_1|$ vs. $I$) demonstrating that valid records strictly remain within the tight deterministic boundary ($\\tau_{S1} = 0.89^\\circ\\text{C}$) regardless of load level, while true anomalies diverge wildly up to $+18.5^\\circ\\text{C}$.
+"""))
+
+cells.append(nbf.v4.new_code_cell("""# Generate and display the Task 1 Core Insight Figure
+import matplotlib.patches as mpatches
+from scipy.ndimage import gaussian_filter1d
+
+# Fit baseline physical conduction model for S1 on Valid training records
+valid_mask = df_train['Validity_Label'] == 'Valid'
+invalid_mask = ~valid_mask
+
+lr_s1_plot = LinearRegression().fit(df_train.loc[valid_mask, op_features], df_train.loc[valid_mask, 'Sensor_S1'])
+th_s1_plot = (df_train.loc[valid_mask, 'Sensor_S1'] - lr_s1_plot.predict(df_train.loc[valid_mask, op_features])).abs().max() * 1.25
+
+df_plot = df_train.copy()
+df_plot['S1_pred'] = lr_s1_plot.predict(df_plot[op_features].fillna(df_plot[op_features].median()))
+df_plot['S1_res'] = (df_plot['Sensor_S1'] - df_plot['S1_pred']).abs()
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 5.2), dpi=150)
+fig.patch.set_facecolor('#ffffff')
+
+valid_color = '#1E88E5'   # Vibrant Blue
+invalid_color = '#D81B60' # Vibrant Crimson/Coral
+
+# Panel 1: Physical Conduction Response (Sensor S1 vs Load Current)
+ax1.set_facecolor('#fafafa')
+ax1.axvspan(85, 115, color='#FFF3E0', alpha=0.7, label='Genuine High-Current Regime (I > 85 A)')
+
+ax1.scatter(
+    df_plot.loc[valid_mask, 'Load_Current_A'],
+    df_plot.loc[valid_mask, 'Sensor_S1'],
+    c=valid_color, alpha=0.65, s=28, edgecolors='none',
+    label=f'Valid Records (n={valid_mask.sum()})'
+)
+
+invalid_s1 = df_plot.loc[invalid_mask, 'Sensor_S1'].copy()
+nan_s1_mask = invalid_s1.isnull()
+ax1.scatter(
+    df_plot.loc[invalid_mask & ~nan_s1_mask, 'Load_Current_A'],
+    df_plot.loc[invalid_mask & ~nan_s1_mask, 'Sensor_S1'],
+    c=invalid_color, marker='^', alpha=0.85, s=45, edgecolors='#880e4f', linewidths=0.5,
+    label=f'Invalid Anomalies (n={invalid_mask.sum()})'
+)
+
+if nan_s1_mask.sum() > 0:
+    ax1.scatter(
+        df_plot.loc[invalid_mask & nan_s1_mask, 'Load_Current_A'],
+        [-1.0] * nan_s1_mask.sum(),
+        c='#7b1fa2', marker='x', s=45, linewidths=1.5,
+        label=f'Sensor Dropouts (NaN, n={nan_s1_mask.sum()})'
+    )
+
+sorted_idx = np.argsort(df_plot.loc[valid_mask, 'Load_Current_A'])
+curr_sorted = df_plot.loc[valid_mask, 'Load_Current_A'].iloc[sorted_idx]
+pred_sorted = df_plot.loc[valid_mask, 'S1_pred'].iloc[sorted_idx]
+pred_smooth = gaussian_filter1d(pred_sorted, sigma=5)
+ax1.plot(curr_sorted, pred_smooth, color='#0d47a1', linestyle='--', linewidth=2.0, label='Physical Conduction $\\hat{S}_1$')
+
+ax1.annotate(
+    'High-Current Regime Shift\\n(Temperatures naturally rise to ~22°C,\\nfollows conduction physics)',
+    xy=(97, 20.5), xytext=(48, 24.5),
+    arrowprops=dict(arrowstyle="->", color='#e65100', lw=1.5),
+    fontsize=8.5, fontweight='bold', color='#bf360c',
+    bbox=dict(boxstyle="round,pad=0.3", fc="#fff3e0", ec="#ffb74d", lw=1)
+)
+
+ax1.annotate(
+    'Extreme Sensor Spikes\\n(Up to +28.5°C, uncoupled from load)',
+    xy=(68, 28.5), xytext=(20, 29.5),
+    arrowprops=dict(arrowstyle="->", color=invalid_color, lw=1.5),
+    fontsize=8.5, fontweight='bold', color='#880e4f',
+    bbox=dict(boxstyle="round,pad=0.3", fc="#fce4ec", ec="#f48fb1", lw=1)
+)
+
+ax1.set_xlabel('Load Current [A]', fontsize=11, fontweight='bold', color='#1e293b')
+ax1.set_ylabel('Sensor S1 Temperature Rise [°C]', fontsize=11, fontweight='bold', color='#1e293b')
+ax1.set_title('(A) Thermal Response: Load Current vs. Terminal Sensor S1', fontsize=11.5, fontweight='bold', pad=10, color='#0f172a')
+ax1.set_xlim(8, 115)
+ax1.set_ylim(-2.5, 32)
+ax1.legend(loc='lower right', fontsize=8.2, framealpha=0.92, facecolor='#ffffff')
+
+# Panel 2: Conduction Residual vs Load Current
+ax2.set_facecolor('#fafafa')
+ax2.axhspan(0, th_s1_plot, color='#E8F5E9', alpha=0.8, label=f'Permissible Conduction Tolerance ($\\leq {th_s1_plot:.2f}$ °C)')
+ax2.axhline(th_s1_plot, color='#2E7D32', linestyle='-', linewidth=1.5)
+ax2.axvspan(85, 115, color='#FFF3E0', alpha=0.4)
+
+ax2.scatter(
+    df_plot.loc[valid_mask, 'Load_Current_A'],
+    df_plot.loc[valid_mask, 'S1_res'],
+    c=valid_color, alpha=0.65, s=28, edgecolors='none',
+    label='Valid Test Runs (Residuals $\\leq \\tau_{S1}$)'
+)
+
+valid_res_invalid_mask = invalid_mask & ~df_plot['S1_res'].isnull()
+ax2.scatter(
+    df_plot.loc[valid_res_invalid_mask, 'Load_Current_A'],
+    df_plot.loc[valid_res_invalid_mask, 'S1_res'],
+    c=invalid_color, marker='^', alpha=0.85, s=45, edgecolors='#880e4f', linewidths=0.5,
+    label='Invalid Anomalies (Spikes, Duplicates, Hardware Faults)'
+)
+
+ax2.annotate(
+    f'Deterministic Boundary $\\tau_{{S1}} = 1.25\\times \\max(res) = {th_s1_plot:.2f}$ °C\\n(Valid records remain bounded at all current levels)',
+    xy=(45, th_s1_plot), xytext=(12, 4.2),
+    arrowprops=dict(arrowstyle="->", color='#2e7d32', lw=1.5),
+    fontsize=8.5, fontweight='bold', color='#1b5e20',
+    bbox=dict(boxstyle="round,pad=0.3", fc="#e8f5e9", ec="#a5d6a7", lw=1)
+)
+
+ax2.annotate(
+    'Anomalous Spike Failures\\n(Diverge up to +18.5°C across ALL load currents)',
+    xy=(82, 18.5), xytext=(22, 16.5),
+    arrowprops=dict(arrowstyle="->", color=invalid_color, lw=1.5),
+    fontsize=8.5, fontweight='bold', color='#880e4f',
+    bbox=dict(boxstyle="round,pad=0.3", fc="#fce4ec", ec="#f48fb1", lw=1)
+)
+
+ax2.set_xlabel('Load Current [A]', fontsize=11, fontweight='bold', color='#1e293b')
+ax2.set_ylabel('Conduction Absolute Residual $|S_1 - \\hat{S}_1|$ [°C]', fontsize=11, fontweight='bold', color='#1e293b')
+ax2.set_title('(B) Conduction Residual vs. Load Current (Decoupling Physics from Defects)', fontsize=11.5, fontweight='bold', pad=10, color='#0f172a')
+ax2.set_xlim(8, 115)
+ax2.set_ylim(-0.5, 20)
+ax2.legend(loc='upper right', fontsize=8.2, framealpha=0.92, facecolor='#ffffff')
+
+plt.tight_layout()
+plt.savefig("task1_regime_vs_anomaly.png", dpi=300, bbox_inches='tight')
+plt.show()
+
+print("\\n[Core Insight] High operating load (I > 85 A) follows the deterministic physical heating curve rather than an anomaly, whereas true anomalies (sensor spikes, dropouts, duplicates) are scattered completely independent of load level.")
+"""))
+
 # Section 3: Task 2 Hotspot Prediction
 cells.append(nbf.v4.new_markdown_cell("""## 3. Task 2: Predict Reference Parameter (Ensemble Modeling)
 We reconstruct clean sensor inputs for corrupted channels and apply physics-informed feature transformations ($I^2$, $V \\times I$) before fitting a blended ensemble of Gradient Boosting, XGBoost, and LightGBM.

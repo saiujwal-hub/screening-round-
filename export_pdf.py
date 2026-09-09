@@ -34,37 +34,37 @@ def generate_methodology_pdf(
 <style>
     @page {{
         size: A4;
-        margin: 1.8cm 1.6cm;
+        margin: 1.4cm 1.5cm;
     }}
     body {{
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 9.8pt;
-        line-height: 1.38;
+        font-size: 9.4pt;
+        line-height: 1.34;
         color: #1a1a1a;
     }}
     h1 {{
-        font-size: 13.5pt;
-        margin: 0 0 4px 0;
+        font-size: 13pt;
+        margin: 0 0 3px 0;
         color: #0f172a;
         font-weight: 700;
     }}
     h2 {{
-        font-size: 10.8pt;
-        margin: 10px 0 4px 0;
+        font-size: 10.4pt;
+        margin: 7px 0 3px 0;
         color: #1e293b;
         font-weight: 600;
         border-bottom: 1px solid #e2e8f0;
         padding-bottom: 2px;
     }}
     p {{
-        margin: 4px 0 6px 0;
+        margin: 3px 0 4px 0;
     }}
     ul, ol {{
-        margin: 4px 0 6px 0;
-        padding-left: 18px;
+        margin: 3px 0 4px 0;
+        padding-left: 17px;
     }}
     li {{
-        margin-bottom: 3px;
+        margin-bottom: 2px;
     }}
     strong {{
         color: #0f172a;
@@ -72,14 +72,29 @@ def generate_methodology_pdf(
     hr {{
         border: none;
         border-top: 1px solid #cbd5e1;
-        margin: 6px 0;
+        margin: 5px 0;
     }}
     code {{
         font-family: Consolas, Monaco, monospace;
-        font-size: 9pt;
+        font-size: 8.8pt;
         background: #f1f5f9;
         padding: 1px 3px;
         border-radius: 3px;
+    }}
+    img {{
+        max-width: 98%;
+        max-height: 160px;
+        height: auto;
+        display: block;
+        margin: 4px auto 1px auto;
+    }}
+    em {{
+        font-size: 8.2pt;
+        color: #334155;
+        display: block;
+        text-align: center;
+        margin-top: 2px;
+        margin-bottom: 4px;
     }}
 </style>
 </head>

@@ -9,7 +9,7 @@ To verify that our predictive performance reflects genuine physical generalizati
 4. **Blended 3-Way Ensemble (Production)**
 
 ### Model Selection Rationale:
-- **Why Ensemble Over Single Model?** While individual models achieve strong random CV (e.g. XGBoost $R^2 = 0.9934$, Gradient Boosting $R^2 = 0.9932$, LightGBM $R^2 = 0.9898$), tree estimators exhibit distinct splitting biases at boundary points. Blending them reduces variance, smooths step-discontinuities across leaf splits, and guarantees maximal stability under unseen sensor noise and out-of-distribution operating regimes.
+- **Why Ensemble Over Single Model?** While individual models achieve strong random CV (XGBoost $R^2 = 0.9918$, Gradient Boosting $R^2 = 0.9928$, LightGBM $R^2 = 0.9903$), tree estimators exhibit distinct splitting biases at boundary points. Blending them reduces overall error (Ensemble MAE: 0.5422°C vs GB: 0.5527°C, XGB: 0.5864°C, LGB: 0.6173°C) and smooths step-discontinuities across leaf splits, guaranteeing maximal stability under unseen sensor noise and out-of-distribution operating regimes.
 - **Physical Feature Coordination**: All models utilize physics-informed features including Joule heating ($I^2$), dielectric stress ($V^2$), and apparent power ($VI$), stabilizing predictions across all physical regimes.
 
 ---
@@ -72,22 +72,23 @@ To verify that our predictive performance reflects genuine physical generalizati
 ## 3. Key Findings Across Testing Dimensions
 
 ### 3.1 Standard 5-Fold Cross-Validation
-- All models achieve $R^2 > 0.989$ and $\text{RMSE} < 1.1^\circ\text{C}$ across out-of-fold splits.
-- The blended ensemble achieves **$R^2 = 0.9930$**, **$\text{RMSE} = 0.8804^\circ\text{C}$**, and **$\text{MAE} = 0.5298^\circ\text{C}$**, providing balanced error reduction.
+- All models achieve $R^2 > 0.990$ across out-of-fold splits.
+- The blended ensemble achieves **$R^2 = 0.9927$**, **$\text{RMSE} = 0.8982^\circ\text{C}$**, and **$\text{MAE} = 0.5422^\circ\text{C}$**, providing the lowest MAE and lowest RMSE among all tested configurations.
 
 ### 3.2 Operating-Regime Holdouts (Distribution Shift)
-- **High Voltage ($V > 25\text{ kV}$)**: $R^2 = 0.957$, $\text{RMSE} = 2.27^\circ\text{C}$.
-- **Low Voltage ($V < 15\text{ kV}$)**: $R^2 = 0.942$, $\text{RMSE} = 2.64^\circ\text{C}$.
-- **High Ambient Temp ($Tamb > 40^\circ\text{C}$)**: $R^2 = 0.909$, $\text{RMSE} = 3.66^\circ\text{C}$.
+- **High Voltage ($V > 25\text{ kV}$)**: $R^2 = 0.9680$, $\text{RMSE} = 1.9717^\circ\text{C}$, $\text{MAE} = 1.3064^\circ\text{C}$.
+- **Low Voltage ($V < 15\text{ kV}$)**: $R^2 = 0.9697$, $\text{RMSE} = 1.7098^\circ\text{C}$, $\text{MAE} = 1.2918^\circ\text{C}$.
+- **High Ambient Temp ($Tamb > 40^\circ\text{C}$)**: $R^2 = 0.9133$, $\text{RMSE} = 3.5810^\circ\text{C}$, $\text{MAE} = 2.2449^\circ\text{C}$.
+- **Extreme Condition ($I > 75\text{A}$ & $Tamb > 38^\circ\text{C}$)**: $R^2 = 0.8378$, $\text{RMSE} = 3.3505^\circ\text{C}$, $\text{MAE} = 2.4237^\circ\text{C}$.
 - **Tree Extrapolation Mechanics on Extreme Current**:
   - Decision tree regressors cannot extrapolate linearly beyond training leaf boundaries. When the entire high-current slice ($I > 85\text{ A}$) is artificially withheld from training, tree ensembles project boundary leaf constants, causing under-prediction on extreme out-of-hull inputs.
   - In production, our model is trained across the full verified operating envelope ($0\text{ A}$ to $90\text{ A}$), ensuring all physical test bench runs fall within the supported interpolation domain.
 
 ### 3.3 Extreme Quantile Performance
-- **Central Core (10th to 90th percentile)**: Ensemble achieves $\text{RMSE} = 0.72^\circ\text{C}$ and $\text{MAE} = 0.48^\circ\text{C}$.
-- **Lower Tail (<10th percentile)**: Extremely accurate with $\text{RMSE} = 0.36^\circ\text{C}$.
-- **Upper Tail (>90th percentile)**: Confined error with $\text{RMSE} = 2.05^\circ\text{C}$, safely maintaining physical safety bounds without explosive predictions.
+- **Central Operating Core (10th to 90th percentile)**: Ensemble achieves $\text{RMSE} = 0.7513^\circ\text{C}$ and $\text{MAE} = 0.5031^\circ\text{C}$.
+- **Lower Tail (< 10th percentile)**: Extremely accurate with $\text{RMSE} = 0.3631^\circ\text{C}$ and $\text{MAE} = 0.2677^\circ\text{C}$.
+- **Upper Tail (> 90th percentile)**: Confined error with $\text{RMSE} = 1.9213^\circ\text{C}$ and $\text{MAE} = 1.1276^\circ\text{C}$, safely maintaining physical bounds without explosive predictions.
 
 ### 3.4 Sensor Noise & Dropout Robustness
-- **Sensor Noise Perturbation ($\pm 0.5^\circ\text{C}$ Gaussian noise)**: Ensemble preserves $R^2 = 0.9965$ and $\text{RMSE} = 0.63^\circ\text{C}$, proving complete immunity to real-world thermocouple noise.
-- **Probe S2 Complete Dropout**: Reconstructing the missing channel from baseline thermal models yields $R^2 = 0.9984$ and $\text{RMSE} = 0.42^\circ\text{C}$, preventing catastrophic failure if physical probes disconnect.
+- **Sensor Noise Perturbation ($\pm 0.5^\circ\text{C}$ Gaussian noise on all probes)**: Ensemble preserves $R^2 = 0.9913$, $\text{RMSE} = 0.9856^\circ\text{C}$, and $\text{MAE} = 0.6505^\circ\text{C}$, demonstrating high stability against real-world thermocouple noise.
+- **Probe S2 Complete Dropout**: Reconstructing the missing channel from baseline thermal models yields $R^2 = 0.9927$, $\text{RMSE} = 0.9001^\circ\text{C}$, and $\text{MAE} = 0.5480^\circ\text{C}$, preventing catastrophic failure if physical probes disconnect.

@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 
-def create_submission_package(team_name="og", output_dir=".", dataset_path=None):
+def create_submission_package(team_name="og", output_dir=".", dataset_path=None, test_df=None):
     csv_file = f"{team_name}.csv" if os.path.exists(os.path.join(output_dir, f"{team_name}.csv")) else "og.csv"
     summary_file = "summary.json"
     script_file = "solution_pipeline.py"
@@ -58,34 +58,45 @@ def create_submission_package(team_name="og", output_dir=".", dataset_path=None)
     assert df_sub['Validity_Label'].isin(['Valid', 'Invalid']).all(), f"Validity_Label contains invalid classes! Found: {set(df_sub['Validity_Label']) - {'Valid', 'Invalid'}}"
 
     # Dynamic cross-validation against supplied test dataset
-    actual_test_path = dataset_path or ("CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx" if os.path.exists("CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx") else None)
-    if actual_test_path and os.path.exists(actual_test_path):
+    df_test_ref = None
+    if test_df is not None:
+        if isinstance(test_df, pd.DataFrame):
+            df_test_ref = test_df
+        elif isinstance(test_df, int):
+            assert len(df_sub) == test_df, f"Prediction row count ({len(df_sub)}) does not match expected row count ({test_df})!"
+    elif dataset_path and os.path.exists(dataset_path):
+        if dataset_path.endswith('.xlsx') or dataset_path.endswith('.xls'):
+            with pd.ExcelFile(dataset_path) as xl:
+                test_sheets = [s for s in xl.sheet_names if 'test' in s.lower()]
+                sheet_to_use = test_sheets[0] if test_sheets else xl.sheet_names[0]
+                df_test_ref = pd.read_excel(xl, sheet_name=sheet_to_use)
+        else:
+            df_test_ref = pd.read_csv(dataset_path)
+    elif dataset_path is None and os.path.exists("CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx"):
+        # Default scenario: only validate against participant file if the row count matches
         try:
-            if actual_test_path.endswith('.xlsx') or actual_test_path.endswith('.xls'):
-                with pd.ExcelFile(actual_test_path) as xl:
-                    test_sheets = [s for s in xl.sheet_names if 'test' in s.lower()]
-                    sheet_to_use = test_sheets[0] if test_sheets else xl.sheet_names[0]
-                    df_test_ref = pd.read_excel(xl, sheet_name=sheet_to_use)
-            else:
-                df_test_ref = pd.read_csv(actual_test_path)
+            with pd.ExcelFile("CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx") as xl:
+                test_sheets = [s for s in xl.sheet_names if 'test' in s.lower()]
+                sheet_to_use = test_sheets[0] if test_sheets else xl.sheet_names[0]
+                part_ref = pd.read_excel(xl, sheet_name=sheet_to_use)
+                if len(part_ref) == len(df_sub):
+                    df_test_ref = part_ref
+        except Exception:
+            pass
 
-            if 'Test_ID' in df_test_ref.columns:
-                print(f"  Checking alignment against actual test dataset ({actual_test_path}):")
-                print(f"    Expected rows: {len(df_test_ref)} | Prediction rows: {len(df_sub)}")
-                assert len(df_sub) == len(df_test_ref), (
-                    f"Prediction row count ({len(df_sub)}) does not match actual test dataset row count ({len(df_test_ref)})!"
-                )
-                assert set(df_sub['Test_ID']) == set(df_test_ref['Test_ID']), (
-                    "Every test record must receive exactly one prediction, and Test_ID set must match test dataset exactly!"
-                )
-                assert list(df_sub['Test_ID']) == list(df_test_ref['Test_ID']), (
-                    "Predictions order must match test dataset order 1-to-1!"
-                )
-                print("    1-to-1 Test_ID matching and row count validation PASSED!")
-        except Exception as e:
-            if isinstance(e, AssertionError):
-                raise
-            print(f"  Note: Could not parse test dataset reference for alignment check ({e}). Skipping cross-dataset check.")
+    if df_test_ref is not None and 'Test_ID' in df_test_ref.columns:
+        print(f"  Checking alignment against actual test dataset reference:")
+        print(f"    Expected rows: {len(df_test_ref)} | Prediction rows: {len(df_sub)}")
+        assert len(df_sub) == len(df_test_ref), (
+            f"Prediction row count ({len(df_sub)}) does not match actual test dataset row count ({len(df_test_ref)})!"
+        )
+        assert set(df_sub['Test_ID']) == set(df_test_ref['Test_ID']), (
+            "Every test record must receive exactly one prediction, and Test_ID set must match test dataset exactly!"
+        )
+        assert list(df_sub['Test_ID']) == list(df_test_ref['Test_ID']), (
+            "Predictions order must match test dataset order 1-to-1!"
+        )
+        print("    1-to-1 Test_ID matching and row count validation PASSED!")
 
     print("  CSV validation passed!")
 

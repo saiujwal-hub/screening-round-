@@ -66,6 +66,25 @@ print("Correlation with Hotspot Reference Parameter:")
 print(corrs)
 """))
 
+cells.append(nbf.v4.new_code_cell("""# Random Forest Feature Importance Analysis on all 8 raw inputs
+from sklearn.ensemble import RandomForestRegressor
+
+raw_features = ['Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C', 'Test_Duration_min',
+                'Sensor_S1', 'Sensor_S2', 'Sensor_S3', 'Sensor_S4']
+
+rf_exploratory = RandomForestRegressor(n_estimators=100, random_state=42)
+rf_exploratory.fit(valid_records[raw_features], valid_records['Reference_Parameter'])
+
+rf_importances = pd.Series(rf_exploratory.feature_importances_, index=raw_features)
+
+print("=== Linear Correlation vs. Nonlinear Random Forest Feature Importance ===")
+comp_df = pd.DataFrame({
+    'Pearson_r': corrs[raw_features].round(4),
+    'RF_Importance_Pct': (rf_importances[raw_features] * 100).round(2)
+}).sort_values(by='RF_Importance_Pct', ascending=False)
+print(comp_df.to_string())
+"""))
+
 # Section 2: Task 1 Anomaly Detection
 cells.append(nbf.v4.new_markdown_cell("""## 2. Task 1: Identify Abnormal Records (Multi-Tier Physics-Grounded Engine)
 Our empirical analysis revealed that abnormal tests represent physical failures rather than regime shifts:

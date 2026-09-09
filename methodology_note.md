@@ -18,26 +18,27 @@ Rather than treating the test bench as a naive statistical black box, our team d
 
 ## 2. Parameter Importance & Physical Relationships
 
-Through empirical correlation and thermodynamic sensitivity analysis on verified tests, parameters were classified into fundamental thermal drivers, local state indicators, and uninformative signals:
+Through empirical correlation and thermodynamic sensitivity analysis on verified tests, parameters were classified into fundamental thermal drivers, local state indicators, and uninformative signals. To rigorously evaluate predictive utility without assuming strict linearity, an independent Random Forest regressor was trained on all 8 raw features (`Applied_Voltage_kV`, `Load_Current_A`, `Ambient_Temperature_C`, `Test_Duration_min`, and `Sensor_S1` through `Sensor_S4`) against `Reference_Parameter` using only Valid training records:
 
 ```
-+-----------------------------------------------------------------------------------+
-| Parameter               | Physical Interpretation                  | Relative Imp.|
-+-----------------------------------------------------------------------------------+
-| Load_Current_A (I)      | Dominant heat source (Joule losses I²R)   | 90.04%       |
-| Sensor_S2               | Load-side terminal temperature rise      |  6.06%       |
-| Ambient_Temperature_C   | Thermal boundary / reference temperature |  3.22%       |
-| Sensor_S1 & Sensor_S3   | Incoming terminal & critical body rise   |  0.37%       |
-| Applied_Voltage_kV (V)  | Dielectric stress / core loss component  |  0.15%       |
-| Test_Duration_min       | Thermal transient duration (time to t_ss)|  0.15%       |
-| Sensor_S4 (auxiliary)   | Uncorrelated auxiliary channel (noise)   |  0.00%       |
-+-----------------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------+
+| Feature (Raw 8 Inputs)  | Physical Interpretation                 | Pearson r | RF Importance|
++---------------------------------------------------------------------------------------------+
+| Load_Current_A (I)      | Dominant heat source (Joule losses I²R) |  +0.8767  | 90.03%       |
+| Sensor_S2               | Load-side terminal temperature rise     |  +0.7953  |  5.99%       |
+| Ambient_Temperature_C   | Thermal boundary / reference temp       |  +0.2377  |  3.19%       |
+| Sensor_S1               | Incoming terminal temperature rise      |  +0.5914  |  0.22%       |
+| Sensor_S3               | Critical body temperature rise          |  +0.5012  |  0.18%       |
+| Test_Duration_min       | Thermal transient duration (time to t_ss)| -0.0042  |  0.13%       |
+| Sensor_S4 (auxiliary)   | Auxiliary channel (uncorrelated noise)  |  -0.0086  |  0.13%       |
+| Applied_Voltage_kV (V)  | Dielectric stress / core loss component |  +0.2666  |  0.12%       |
++---------------------------------------------------------------------------------------------+
 ```
 
 ### Key Physical Insights:
 1. **Joule Dissipation Dominance**: Thermal dissipation is fundamentally quadratic in current ($P = I^2 R$). Current alone exhibits an $87.7\%$ linear correlation with hotspot rise, jumping to $92.7\%$ when transformed to $I^2$.
-2. **Thermal Conduction to Load Terminal ($S_2$)**: Sensor $S_2$ shows the closest thermal coupling to the internal hotspot ($r = 0.795$). As current flows to the load side, $S_2$ acts as the direct thermal conduction pathway from the internal winding hotspot.
-3. **Irrelevance of Auxiliary Sensor $S_4$**: Sensor $S_4$ displayed near-zero correlation ($r = -0.0085$) with the reference parameter and zero diagnostic value for anomaly detection. Pruning $S_4$ eliminated high-dimensional noise and prevented variance inflation.
+2. **Thermal Conduction to Load Terminal ($S_2$)**: Sensor $S_2$ shows the closest thermal coupling to the internal hotspot ($r = 0.795$, $5.99\%$ RF importance). As current flows to the load side, $S_2$ acts as the direct thermal conduction pathway from the internal winding hotspot.
+3. **Irrelevance and Pruning of Auxiliary Sensor $S_4$**: Both the negligible linear Pearson correlation ($r = -0.0086$) and the bottom-tier nonlinear Random Forest feature importance ($0.13\%$, indistinguishable from baseline noise and tied for lowest across all sensors) provide joint empirical evidence that $S_4$ carries no physical signal or predictive utility regarding hotspot temperature rise, justifying its deliberate exclusion to eliminate noise variance and prevent overfitting on hidden test distributions.
 
 ---
 

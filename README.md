@@ -26,7 +26,7 @@ This repository contains the complete, reproducible end-to-end engineering solut
 ## ⚙️ Physics-Informed Methodology
 
 1. **Joule Dissipation Dominance**: Hotspot temperature rise is strongly driven by $P = I^2 R$ ($r = 0.927$) and conductive heat transfer to load terminal $S_2$ ($r = 0.795$).
-2. **Auxiliary Sensor Pruning**: Sensor $S_4$ was verified as uninformative noise ($r = -0.0085$) and pruned to prevent overfitting on unseen test distributions.
+2. **Auxiliary Sensor Pruning**: Sensor $S_4$ was verified as uninformative noise through dual linear and nonlinear validation: near-zero Pearson correlation ($r = -0.0086$) and a bottom-tier Random Forest importance of only $0.13\%$ across all 8 raw features. It is pruned to prevent overfitting on unseen test distributions.
 3. **Multi-Tier Physics-Grounded Anomaly Engine**:
    - **Tier 1 (Operating Parameter Ingestion)**: Any record missing operating parameters ($V, I, T_{amb}, t$) is imputed with the training-fold median for safe inference AND flagged as `Invalid` (unreliable test input).
    - **Tier 2 (Sensor Dropout)**: Missing values ($NaN$) on essential terminal probes $S_1, S_2, S_3$.

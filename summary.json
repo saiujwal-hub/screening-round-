@@ -1,0 +1,20 @@
+{
+    "number_of_records_analysed": 350,
+    "number_of_valid_records": 304,
+    "number_of_abnormal_invalid_records_identified": 46,
+    "percentage_abnormal": 13.14,
+    "minimum_predicted_reference_parameter": 12.9483,
+    "maximum_predicted_reference_parameter": 57.546,
+    "average_predicted_reference_parameter": 26.3759,
+    "three_test_ids_requiring_highest_attention": [
+        "TST-0084",
+        "TST-0258",
+        "TST-0172"
+    ],
+    "attention_rationale": {
+        "TST-0084": "Highest predicted hotspot temperature rise (57.55\u00b0C), representing maximum thermal stress and insulation degradation risk.",
+        "TST-0258": "Severe sensor spike failure with maximum recorded physical residual divergence (22.65\u00b0C on S3) under high current loading (101.1 A).",
+        "TST-0172": "Critical sensor hardware dropout (missing channel S2) under elevated thermal loading (38.56\u00b0C predicted rise)."
+    },
+    "approach_explanation": "We adopted a physics-grounded ML strategy. Task 1 implemented a three-tier deterministic filter separating physical regime shifts from anomalies by identifying missing values, test duplicates, and thermal residual outliers (>1.25x baseline error). For Task 2, physical sensor values were reconstructed where corrupted, and an ensemble of Gradient Boosting, XGBoost, and LightGBM was trained on Joule heating (I^2) and thermal conduction dynamics, achieving R^2 > 0.99. Task 3 synthesizes fleet-level analytics, prioritizing high thermal-stress and sensor-dropout units to guide condition-based maintenance and digital twin integration."
+}

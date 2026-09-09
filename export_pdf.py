@@ -87,6 +87,10 @@ def generate_methodology_pdf(
         padding: 1px 3px;
         border-radius: 3px;
     }}
+    * {{
+        hyphens: none !important;
+        -webkit-hyphens: none !important;
+    }}
     img {{
         max-width: 98%;
         max-height: 160px;
@@ -101,6 +105,18 @@ def generate_methodology_pdf(
         text-align: center;
         margin-top: 2px;
         margin-bottom: 4px;
+    }}
+    .equation-box {{
+        text-align: center;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        padding: 5px 8px;
+        margin: 5px auto;
+        font-family: Consolas, "Segoe UI", sans-serif;
+        font-weight: 600;
+        color: #0f172a;
+        font-size: 9.0pt;
     }}
 </style>
 </head>

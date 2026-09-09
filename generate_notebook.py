@@ -486,7 +486,8 @@ test_predictions = (m1.predict(test_clean[feature_cols]) +
 df_test['Predicted_Reference_Parameter'] = np.round(test_predictions, 4)
 
 # Export <TeamName>.csv
-submission_df = df_test[['Test_ID', 'Predicted_Reference_Parameter', 'Validity_Label']]
+df_test['Valid_Invalid'] = df_test['Validity_Label']
+submission_df = df_test[['Test_ID', 'Predicted_Reference_Parameter', 'Valid_Invalid']]
 submission_df.to_csv("og.csv", index=False)
 print("Saved og.csv successfully! (350 rows)")
 submission_df.head(10)

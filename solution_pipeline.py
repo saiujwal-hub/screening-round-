@@ -725,7 +725,7 @@ def run_pipeline(data_path, team_name="og", output_dir=".", verbose=True):
         submission_df = pd.DataFrame({
             'Test_ID': df_test['Test_ID'],
             'Predicted_Reference_Parameter': np.round(predictions, 4),
-            'Validity_Label': validity_labels
+            'Valid_Invalid': validity_labels
         })
         submission_df.to_csv(csv_filename, index=False)
         if verbose: print(f"  Generated submission CSV: {csv_filename} ({len(submission_df)} rows)")
@@ -848,16 +848,16 @@ def run_stress_test(data_path, team_name="PowerNext_Alpha_StressTest"):
         test_results.append(("Zero NaN Predictions", f"{nan_preds} nulls detected", "PASS" if nan_preds == 0 else "FAIL"))
 
         # Check 4: Zero NaN validity labels
-        nan_labels = int(stress_sub['Validity_Label'].isnull().sum())
+        nan_labels = int(stress_sub['Valid_Invalid'].isnull().sum())
         test_results.append(("Zero NaN Validity Labels", f"{nan_labels} nulls detected", "PASS" if nan_labels == 0 else "FAIL"))
 
         # Check 5: Injected NaN op parameters flagged Invalid
-        nan_flagged = (stress_sub[stress_sub['Test_ID'].isin(injected_nan_test_ids)]['Validity_Label'] == 'Invalid')
+        nan_flagged = (stress_sub[stress_sub['Test_ID'].isin(injected_nan_test_ids)]['Valid_Invalid'] == 'Invalid')
         nan_pass = nan_flagged.all()
         test_results.append(("Missing Op Param Flagging", f"{nan_flagged.sum()}/{len(injected_nan_test_ids)} flagged Invalid (100%)", "PASS" if nan_pass else "FAIL"))
 
         # Check 6: Injected duplicate rows flagged Invalid
-        dup_flagged = (stress_sub[stress_sub['Test_ID'].isin(injected_dup_test_ids)]['Validity_Label'] == 'Invalid')
+        dup_flagged = (stress_sub[stress_sub['Test_ID'].isin(injected_dup_test_ids)]['Valid_Invalid'] == 'Invalid')
         dup_pass = dup_flagged.all()
         test_results.append(("Injected Duplicate Flagging", f"{dup_flagged.sum()}/{len(injected_dup_test_ids)} flagged Invalid (100%)", "PASS" if dup_pass else "FAIL"))
 

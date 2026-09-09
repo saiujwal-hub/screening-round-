@@ -20,7 +20,7 @@ Every required deliverable and guideline has been strictly checked against compe
 | Deliverable / Requirement | Specification / Constraint | Actual Status in Repository | Verification Result |
 | :--- | :--- | :--- | :---: |
 | **Prediction File** | `<TeamName>.csv` -> `og.csv` | Exactly named `og.csv`, contains 350 rows matching test set. | **PASS** |
-| **CSV Columns** | `Test_ID`, `Predicted_Reference_Parameter`, `Validity_Label` | Columns strictly match specification order and spelling. | **PASS** |
+| **CSV Columns** | `Test_ID`, `Predicted_Reference_Parameter`, `Valid_Invalid` | Columns strictly match specification order and spelling. | **PASS** |
 | **CSV Data Quality** | No NaNs, non-empty IDs, physical bounds ($>0^\circ\text{C}, <150^\circ\text{C}$) | 0 nulls, 0 NaNs, min $13.15^\circ\text{C}$, max $57.16^\circ\text{C}$, valid classes. | **PASS** |
 | **Automated Summary** | `summary.json` (and `summary.csv`) | Both formats generated; contains all required schema keys. | **PASS** |
 | **Summary Word Count** | `approach_explanation` $\le 100$ words | Exactly 84 words (verified by programmatic word counter). | **PASS** |

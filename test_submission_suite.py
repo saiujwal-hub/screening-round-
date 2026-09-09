@@ -156,7 +156,7 @@ class TestPowerNextSubmissionSuite(unittest.TestCase):
 
         out_df = pd.DataFrame({
             'Test_ID': test_df['Test_ID'],
-            'Validity_Label': test_flags,
+            'Valid_Invalid': test_flags,
             'Predicted_Reference_Parameter': preds
         })
 

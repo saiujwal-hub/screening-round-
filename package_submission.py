@@ -47,7 +47,7 @@ def create_submission_package(team_name="og", output_dir=".", dataset_path=None,
     print(f"  Rows count: {len(df_sub)}")
     print(f"  Columns: {list(df_sub.columns)}")
     assert len(df_sub) > 0, f"CSV {csv_file} is empty!"
-    assert list(df_sub.columns) == ['Test_ID', 'Predicted_Reference_Parameter', 'Validity_Label'], f"CSV column headers mismatch! Found: {list(df_sub.columns)}"
+    assert list(df_sub.columns) == ['Test_ID', 'Predicted_Reference_Parameter', 'Valid_Invalid'], f"CSV column headers mismatch! Found: {list(df_sub.columns)}"
     assert df_sub['Test_ID'].isnull().sum() == 0, "Test_ID contains null values!"
     assert (df_sub['Test_ID'].astype(str).str.strip() == '').sum() == 0, "Test_ID contains empty string values!"
     assert df_sub['Test_ID'].duplicated().sum() == 0, f"Test_ID contains {df_sub['Test_ID'].duplicated().sum()} unexpected duplicate IDs!"
@@ -55,7 +55,7 @@ def create_submission_package(team_name="og", output_dir=".", dataset_path=None,
     assert np.all(np.isfinite(df_sub['Predicted_Reference_Parameter'])), "Predicted_Reference_Parameter contains infinite values!"
     assert (df_sub['Predicted_Reference_Parameter'] > 0).all(), "Predictions contain non-positive temperature rise values!"
     assert (df_sub['Predicted_Reference_Parameter'] < 150).all(), "Predictions contain implausibly high temperature rise values (> 150°C)!"
-    assert df_sub['Validity_Label'].isin(['Valid', 'Invalid']).all(), f"Validity_Label contains invalid classes! Found: {set(df_sub['Validity_Label']) - {'Valid', 'Invalid'}}"
+    assert df_sub['Valid_Invalid'].isin(['Valid', 'Invalid']).all(), f"Valid_Invalid contains invalid classes! Found: {set(df_sub['Valid_Invalid']) - {'Valid', 'Invalid'}}"
 
     # Dynamic cross-validation against supplied test dataset
     df_test_ref = None

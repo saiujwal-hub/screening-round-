@@ -41,16 +41,16 @@ def test_packaging_sizes():
             df_sub = pd.DataFrame({
                 "Test_ID": test_ids,
                 "Predicted_Reference_Parameter": [25.0 + (i % 15) * 0.5 for i in range(size)],
-                "Validity_Label": ["Valid" if i % 7 != 0 else "Invalid" for i in range(size)]
+                "Valid_Invalid": ["Valid" if i % 7 != 0 else "Invalid" for i in range(size)]
             })
             df_sub.to_csv(os.path.join(temp_dir, "og.csv"), index=False)
 
             # 3. Create matching summary.json
             summary_data = {
                 "number_of_records_analysed": size,
-                "number_of_valid_records": int((df_sub['Validity_Label'] == 'Valid').sum()),
-                "number_of_abnormal_invalid_records_identified": int((df_sub['Validity_Label'] == 'Invalid').sum()),
-                "percentage_abnormal": round(((df_sub['Validity_Label'] == 'Invalid').sum() / size) * 100, 2),
+                "number_of_valid_records": int((df_sub['Valid_Invalid'] == 'Valid').sum()),
+                "number_of_abnormal_invalid_records_identified": int((df_sub['Valid_Invalid'] == 'Invalid').sum()),
+                "percentage_abnormal": round(((df_sub['Valid_Invalid'] == 'Invalid').sum() / size) * 100, 2),
                 "minimum_predicted_reference_parameter": round(float(df_sub['Predicted_Reference_Parameter'].min()), 4),
                 "maximum_predicted_reference_parameter": round(float(df_sub['Predicted_Reference_Parameter'].max()), 4),
                 "average_predicted_reference_parameter": round(float(df_sub['Predicted_Reference_Parameter'].mean()), 4),

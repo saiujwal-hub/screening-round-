@@ -1,4 +1,4 @@
-Test_ID,Predicted_Reference_Parameter,Validity_Label
+Test_ID,Predicted_Reference_Parameter,Valid_Invalid
 TST-0278,34.0491,Invalid
 TST-0006,19.0286,Valid
 TST-0047,56.3528,Valid

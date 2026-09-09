@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 
-def create_submission_package(team_name="og", output_dir="."):
+def create_submission_package(team_name="og", output_dir=".", dataset_path=None):
     csv_file = f"{team_name}.csv" if os.path.exists(os.path.join(output_dir, f"{team_name}.csv")) else "og.csv"
     summary_file = "summary.json"
     script_file = "solution_pipeline.py"
@@ -56,6 +56,37 @@ def create_submission_package(team_name="og", output_dir="."):
     assert (df_sub['Predicted_Reference_Parameter'] > 0).all(), "Predictions contain non-positive temperature rise values!"
     assert (df_sub['Predicted_Reference_Parameter'] < 150).all(), "Predictions contain implausibly high temperature rise values (> 150°C)!"
     assert df_sub['Validity_Label'].isin(['Valid', 'Invalid']).all(), f"Validity_Label contains invalid classes! Found: {set(df_sub['Validity_Label']) - {'Valid', 'Invalid'}}"
+
+    # Dynamic cross-validation against supplied test dataset
+    actual_test_path = dataset_path or ("CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx" if os.path.exists("CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx") else None)
+    if actual_test_path and os.path.exists(actual_test_path):
+        try:
+            if actual_test_path.endswith('.xlsx') or actual_test_path.endswith('.xls'):
+                with pd.ExcelFile(actual_test_path) as xl:
+                    test_sheets = [s for s in xl.sheet_names if 'test' in s.lower()]
+                    sheet_to_use = test_sheets[0] if test_sheets else xl.sheet_names[0]
+                    df_test_ref = pd.read_excel(xl, sheet_name=sheet_to_use)
+            else:
+                df_test_ref = pd.read_csv(actual_test_path)
+
+            if 'Test_ID' in df_test_ref.columns:
+                print(f"  Checking alignment against actual test dataset ({actual_test_path}):")
+                print(f"    Expected rows: {len(df_test_ref)} | Prediction rows: {len(df_sub)}")
+                assert len(df_sub) == len(df_test_ref), (
+                    f"Prediction row count ({len(df_sub)}) does not match actual test dataset row count ({len(df_test_ref)})!"
+                )
+                assert set(df_sub['Test_ID']) == set(df_test_ref['Test_ID']), (
+                    "Every test record must receive exactly one prediction, and Test_ID set must match test dataset exactly!"
+                )
+                assert list(df_sub['Test_ID']) == list(df_test_ref['Test_ID']), (
+                    "Predictions order must match test dataset order 1-to-1!"
+                )
+                print("    1-to-1 Test_ID matching and row count validation PASSED!")
+        except Exception as e:
+            if isinstance(e, AssertionError):
+                raise
+            print(f"  Note: Could not parse test dataset reference for alignment check ({e}). Skipping cross-dataset check.")
+
     print("  CSV validation passed!")
 
     # Validate JSON
@@ -105,4 +136,10 @@ def create_submission_package(team_name="og", output_dir="."):
 
 
 if __name__ == "__main__":
-    create_submission_package()
+    import argparse
+    parser = argparse.ArgumentParser(description="Package PowerNext-AI screening submission archive.")
+    parser.add_argument("--team-name", default="og", help="Registered team name (default: 'og')")
+    parser.add_argument("--output-dir", default=".", help="Output directory containing deliverables")
+    parser.add_argument("--dataset-path", default=None, help="Path to input test dataset for verification")
+    args = parser.parse_args()
+    create_submission_package(team_name=args.team_name, output_dir=args.output_dir, dataset_path=args.dataset_path)

@@ -1,0 +1,14 @@
+Category,Method,CV_Accuracy,CV_Precision,CV_Recall,CV_F1,False_Positives,False_Negatives,HighLoad_False_Positives,Test_Invalid_Count,Threshold_S1,Threshold_S2,Threshold_S3
+Max-Based,Max x 1.00 (Tight),0.975,0.9578,0.8471,0.8974,5,20,2,47,0.7105,0.5457,1.0442
+Max-Based,Max x 1.15,0.979,0.9882,0.8471,0.9117,1,20,0,46,0.817,0.6276,1.2008
+Max-Based,Max x 1.25 (Current Production),0.98,1.0,0.8471,0.9165,0,20,0,46,0.8881,0.6821,1.3052
+Max-Based,Max x 1.50 (Loose),0.98,1.0,0.8471,0.9165,0,20,0,46,1.0657,0.8186,1.5662
+Percentile,99.0th Percentile,0.944,0.7559,0.8571,0.8009,37,19,15,66,0.4904,0.4366,0.7623
+Percentile,99.5th Percentile,0.96,0.8483,0.8471,0.8471,20,20,7,57,0.5625,0.4722,0.8113
+Percentile,99.9th Percentile,0.972,0.935,0.8471,0.8874,8,20,2,47,0.6255,0.5278,1.0273
+Percentile,99.95th Percentile,0.974,0.9498,0.8471,0.894,6,20,2,47,0.668,0.5368,1.0357
+Robust MAD,Median + 3.0 * NMAD,0.952,0.7916,0.864,0.8252,30,18,9,58,0.4402,0.4224,0.6966
+Robust MAD,Median + 4.0 * NMAD,0.973,0.9413,0.8471,0.8914,7,20,2,48,0.5464,0.5242,0.864
+Robust MAD,Median + 5.0 * NMAD,0.978,0.9811,0.8471,0.9084,2,20,0,46,0.6526,0.6261,1.0314
+Robust MAD,Median + 6.0 * NMAD,0.98,1.0,0.8471,0.9165,0,20,0,46,0.7588,0.7279,1.1988
+Robust MAD,Median + 8.0 * NMAD,0.98,1.0,0.8471,0.9165,0,20,0,46,0.9713,0.9315,1.5336

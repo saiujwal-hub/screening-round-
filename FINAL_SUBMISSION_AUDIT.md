@@ -67,22 +67,18 @@ All metrics below are computed directly from deterministic code execution (no fa
 
 ### Task 2: Hotspot Temperature Prediction
 - **5-Fold Cross-Validation on Valid Records (866 samples)**:
-  - Mean $R^2$: **0.9916**
-  - Mean RMSE: **0.9673 °C**
-  - Mean MAE: **0.5671 °C**
-  - Individual Model Benchmarking:
-    - Gradient Boosting: $R^2 = 0.9928$
-    - HistGradientBoosting: $R^2 = 0.9897$
-    - Random Forest: $R^2 = 0.9868$
-    - Blended 3-Way Ensemble: $R^2 = 0.9916$
-- **Test Set Prediction Statistics**:
-  - Minimum Hotspot Rise: **13.1498 °C**
-  - Average Hotspot Rise: **26.3575 °C**
-  - Maximum Hotspot Rise: **57.1561 °C**
+  - Gradient Boosting: $R^2 = 0.9928$, $\text{RMSE} = 0.9001^\circ\text{C}$, $\text{MAE} = 0.5527^\circ\text{C}$
+  - XGBoost Regressor: $R^2 = 0.9918$, $\text{RMSE} = 0.9529^\circ\text{C}$, $\text{MAE} = 0.5864^\circ\text{C}$
+  - LightGBM Regressor: $R^2 = 0.9903$, $\text{RMSE} = 1.0422^\circ\text{C}$, $\text{MAE} = 0.6173^\circ\text{C}$
+  - Blended 3-Way Ensemble (Production): **$R^2 = 0.9927$**, **$\text{RMSE} = 0.8982^\circ\text{C}$**, **$\text{MAE} = 0.5422^\circ\text{C}$**
+- **Test Set Prediction Statistics (350 records)**:
+  - Minimum Hotspot Rise: **12.9483 °C**
+  - Average Hotspot Rise: **26.3759 °C**
+  - Maximum Hotspot Rise: **57.5460 °C**
   - Missing Values: **0**
 
 ### Task 3: Top-3 Attention Test IDs & Rationale
-1. **`TST-0084`**: Highest predicted hotspot temperature rise ($57.16^\circ\text{C}$), representing peak thermal stress and dielectric degradation hazard.
+1. **`TST-0084`**: Highest predicted hotspot temperature rise ($57.55^\circ\text{C}$), representing peak thermal stress and dielectric degradation hazard.
 2. **`TST-0258`**: Severe sensor spike failure with maximum recorded physical residual divergence ($58.11^\circ\text{C}$ on $S_3$) under severe load current ($101.1\text{ A}$).
 3. **`TST-0172`**: Critical sensor hardware dropout (missing channel $S_2$) under elevated thermal loading ($32.84^\circ\text{C}$ predicted rise).
 
@@ -94,12 +90,12 @@ The automated test suite evaluated 10 critical edge cases and failure modes:
 
 | Test # | Scenario Description | Expected Behavior | Observed Result | Status |
 | :---: | :--- | :--- | :--- | :---: |
-| 1 | Standard Valid Inputs | Clean predictions, non-NaN, $[0, 150]^\circ\text{C}$ | Predictions finite, min $13.15^\circ\text{C}$ | **PASS** |
+| 1 | Standard Valid Inputs | Clean predictions, non-NaN, $[0, 150]^\circ\text{C}$ | Predictions finite, min $12.95^\circ\text{C}$ | **PASS** |
 | 2 | Missing Sensor Readings | Tier 2 flags Invalid, robust imputation | Correctly flagged Invalid, 0 NaNs | **PASS** |
 | 3 | Duplicate Operating Runs | Tier 3 identifies identical operating tuples | Duplicate flagged Invalid | **PASS** |
 | 4 | High-Load Regime ($I > 85\text{ A}$) | 0 false alarms on physical high-load runs | 0 false alarms, bounded predictions | **PASS** |
 | 5 | Corrupted Sensor Values | Tier 4/5/6 flags unphysical / uncoupled readings | Flagged Invalid, finite fallback | **PASS** |
-| 6 | Variable Test Row Counts | Evaluate sizes: 50, 200, 500 records | Handled dynamically, exact lengths | **PASS** |
+| 6 | Variable Test Row Counts | Evaluate sizes: 50, 200, 300, 500 records | Handled dynamically, exact lengths | **PASS** |
 | 7 | Shuffled / Arbitrary IDs | Preserve non-consecutive arbitrary string IDs | 100% 1-to-1 preservation | **PASS** |
 | 8 | Extreme Ambient Conditions | Ambient $10^\circ\text{C}$ and $52^\circ\text{C}$ | Bounded, physically stable | **PASS** |
 | 9 | Column Aliasing & Naming | Normalize lowercase, missing units | Successfully standardized | **PASS** |
@@ -113,20 +109,21 @@ All deliverables and audit logs have been cryptographically hashed:
 
 | File Name | SHA-256 Checksum | Size |
 | :--- | :--- | :---: |
-| **`og-submission.zip`** | `5861C4221DE12E6E282792BE464EA2D778ABB125128E7CFA6E9FA6B593996816` | 1.57 MB |
-| **`og.csv`** | `80A0F967C74F9216E8C420CA0252F4C1E896B331DB7ED009AD20F145226DA54F` | 8.3 KB |
-| **`summary.json`** | `F1E9573628634407959CC2467B09276B059B507E7B772707B00932141F6E6DB4` | 1.6 KB |
-| **`summary.csv`** | `EF84E120D5CB1324BA192892AE40A94EF774C901B0CBA02B1A1C1955DBEF6856` | 1.0 KB |
+| **`og-submission.zip`** | `D7CEEA72DCAD0719CD177D814EAC021A79CCF3F22EDA1596FC7B26AF19582321` | 1.57 MB |
+| **`og.csv`** | `499A1C98FDA9983A3ED1CBED019C064F13849119A89AFE68EC7395E3AAAAF4C9` | 8.3 KB |
+| **`summary.json`** | `F471B1D44D0853087762A37BEBE6BCA98D7F783918EB0061DB4BE5C0AB498E45` | 1.6 KB |
+| **`summary.csv`** | `D059E39F7D4A00C09262CAF13986055B21C936D4B135660061B7B9BBBA41A27C` | 1.0 KB |
 | **`methodology_note.pdf`** | `5870027A6504FC80C3D18B7C53DB59C54AA62299E4CE1CA0BC23A3B4FEB1A707` | 820 KB |
 | **`methodology_note.md`** | `82C694B352073E6F25A09A328C3AA37158DD053080DB28B779F712B0726146DE` | 8.2 KB |
 | **`solution_pipeline.py`** | `6273495453515690137034A681F9EFFDE096F81EDB72AF23196CEA78EE93996A` | 46.6 KB |
 | **`solution_notebook.ipynb`** | `02AC49B8BA77E23981689540AEEE353BA6C6662322E789E8C2C133D5850D73CB` | 37.4 KB |
-| **`validation_invalid_audit.csv`** | `94AE11221A24C3DEEE3BF0C996EDAE0A7FA8DC22E84F6C6B537C9FC59CEB73E6` | 194 KB |
-| **`validation_invalid_audit.json`** | `D150E2598853D2A0FBAF47A4455D65C2DD965308BC205749CD2B853357A4C5A1` | 1.3 KB |
-| **`model_stress_test_report.csv`** | `9CFF2770F79AECBBCA51E249D2D68919F2B7574464B5B3E9007DB9076CAE7ECC` | 2.5 KB |
-| **`model_stress_test_report.json`** | `CDEB7D5B783717C8E16B0C9E01B7900038C588376FD6008EC5EF09BCC78A66A6` | 4.8 KB |
-| **`MODEL_ROBUSTNESS_REPORT.md`** | `0AAF4340F9A8F8438936048383F8616E6EFC06D12A3746A0BE59C8DAE75305F9` | 4.9 KB |
-| **`test_submission_suite.py`** | `8372DFF0ACEFDB8D883EEA0FFDAC4A3600F4EEB6E8ADE3611B642E7B48E7192D` | 11.6 KB |
+| **`anomaly_threshold_comparison.csv`** | `FF136E6BB9A1DC83EAB17FAEAB834731AC0A39A21A24D1686BDB6F4AA7205FA1` | 1.5 KB |
+| **`anomaly_threshold_report.md`** | `845A1ECF16EAF3C023EA1F408EC06B0502EFB87426B960A1914542203516F323` | 4.2 KB |
+| **`model_stress_test_report.csv`** | `90294D8EE2D0E528CB4DC3A4E18D9D56CA5D96A4D28E57DE1A8AAF77BCD33010` | 4.6 KB |
+| **`model_stress_test_report.json`** | `6A29196E7C8F2D2E9D00E95B2D98E1D176818C4BD9F77CC5831C007AC05BD039` | 7.8 KB |
+| **`MODEL_ROBUSTNESS_REPORT.md`** | `C6C4713B2FF8FEC00C796C9EBD36ED3AFAE6FB3AE52D773B28B760C8668038F6` | 4.9 KB |
+| **`test_submission_suite.py`** | `23E7A821B238FA9ED5DD466A7FB6C31EE953AD5ED5D7D6491F7AD28C719789CA` | 11.6 KB |
+| **`package_submission.py`** | `E20A07E183398B0B2B6D2DCA3410F5030D433DC2CCBED682A64A1A9510F0A9BA` | 6.8 KB |
 
 ---
 

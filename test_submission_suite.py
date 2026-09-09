@@ -128,8 +128,8 @@ class TestPowerNextSubmissionSuite(unittest.TestCase):
         self.assertFalse(np.isnan(preds).any(), "Predictions on corrupted records must remain finite.")
 
     def test_06_variable_row_counts(self):
-        """Scenario 6: Verify arbitrary test set sizes (50, 200, 500 rows) without hardcoded 350 assumptions."""
-        for n_rows in [50, 200, 500]:
+        """Scenario 6: Verify arbitrary test set sizes (50, 200, 300, 500 rows) without hardcoded 350 assumptions."""
+        for n_rows in [50, 200, 300, 500]:
             if n_rows <= len(self.df_test_base):
                 subset = self.df_test_base.copy().iloc[:n_rows].reset_index(drop=True)
             else:

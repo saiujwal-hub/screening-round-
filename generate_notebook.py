@@ -340,6 +340,23 @@ print("Exported summary.json:")
 print(json.dumps(summary_json, indent=2))
 """))
 
+# Section 5: Defensive Engineering & Synthetic Robustness Stress Test
+cells.append(nbf.v4.new_markdown_cell("""## 5. Defensive Engineering & Robustness Stress Testing
+To guarantee robust operation on real-world hidden test benches:
+1. **Schema Validation**: Ingestion routines check mandatory sheets (`Training_Data`, `Test_Data`) and all required operating columns, surfacing loud, diagnostic errors on schema drifts.
+2. **Missing Operating Parameter Imputation**: Any record missing operating parameters (`Applied_Voltage_kV`, `Load_Current_A`, `Ambient_Temperature_C`, `Test_Duration_min`) is imputed with the training median for safe model inference AND flagged as `Invalid` (unreliable test input).
+3. **Synthetic Robustness Stress Test**:
+   - Injects 5% missing values randomly in each operating parameter column.
+   - Injects 5% duplicate operating condition rows.
+   - Confirms end-to-end pipeline completion, zero NaNs, and 100% correct invalid flagging.
+"""))
+
+cells.append(nbf.v4.new_code_cell("""from solution_pipeline import run_stress_test
+
+# Execute synthetic robustness stress test
+run_stress_test("CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx")
+"""))
+
 nb.cells = cells
 
 with open(r"c:\Users\meesa\Downloads\screening\solution_notebook.ipynb", "w", encoding="utf-8") as f:

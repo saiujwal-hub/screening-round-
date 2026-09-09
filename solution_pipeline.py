@@ -18,6 +18,8 @@ from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import GradientBoostingRegressor
 import xgboost as xgb
 import lightgbm as lgb
+from sklearn.model_selection import KFold
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
 
 def load_data(file_path):
@@ -85,6 +87,64 @@ def detect_anomalies(df_train, df_test):
         'nan_mask': nan_mask, 'dup_mask': dup_mask, 'spike_mask': spike_mask
     }
     return validity_labels, models_dict
+
+
+def evaluate_task1_cv(df_train, n_splits=5):
+    """
+    Leakage-Free 5-Fold Cross-Validation for Task 1 Anomaly Detection Engine.
+    For each fold:
+      1. Baseline regression models (lr_s1, lr_s2, lr_s3) are fit ONLY on the training fold's Valid records.
+      2. Anomaly thresholds (th_s1, th_s2, th_s3) are computed ONLY from training fold's Valid residuals.
+      3. Detection rules (Missing, Duplicates, Spikes) are evaluated on the held-out validation fold
+         (which includes both Valid and Invalid records) without any data leakage.
+    """
+    op_features = ['Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C', 'Test_Duration_min']
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+
+    fold_results = []
+    for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
+        train_fold = df_train.iloc[train_idx]
+        val_fold = df_train.iloc[val_idx]
+
+        # Fit ONLY on Valid records of the current training fold
+        valid_train = train_fold[train_fold['Validity_Label'] == 'Valid']
+        lr_s1 = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S1'])
+        lr_s2 = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S2'])
+        lr_s3 = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S3'])
+
+        # Thresholds derived strictly from training fold residuals
+        th_s1 = valid_train['Sensor_S1'].sub(lr_s1.predict(valid_train[op_features])).abs().max() * 1.25
+        th_s2 = valid_train['Sensor_S2'].sub(lr_s2.predict(valid_train[op_features])).abs().max() * 1.25
+        th_s3 = valid_train['Sensor_S3'].sub(lr_s3.predict(valid_train[op_features])).abs().max() * 1.25
+
+        # Evaluate on held-out validation fold
+        pred_s1 = lr_s1.predict(val_fold[op_features])
+        pred_s2 = lr_s2.predict(val_fold[op_features])
+        pred_s3 = lr_s3.predict(val_fold[op_features])
+
+        res_s1 = np.abs(val_fold['Sensor_S1'] - pred_s1)
+        res_s2 = np.abs(val_fold['Sensor_S2'] - pred_s2)
+        res_s3 = np.abs(val_fold['Sensor_S3'] - pred_s3)
+
+        nan_mask = val_fold[['Sensor_S1', 'Sensor_S2', 'Sensor_S3']].isnull().any(axis=1)
+        dup_mask = val_fold.duplicated(subset=op_features, keep=False) | val_fold[op_features].apply(tuple, axis=1).isin(train_fold[op_features].apply(tuple, axis=1))
+        spike_mask = (res_s1 > th_s1) | (res_s2 > th_s2) | (res_s3 > th_s3)
+
+        pred_invalid = nan_mask | dup_mask | spike_mask
+        act_invalid = (val_fold['Validity_Label'] == 'Invalid')
+
+        fold_results.append({
+            'Fold': fold + 1,
+            'Accuracy': accuracy_score(act_invalid, pred_invalid),
+            'Precision': precision_score(act_invalid, pred_invalid),
+            'Recall': recall_score(act_invalid, pred_invalid),
+            'F1': f1_score(act_invalid, pred_invalid),
+            'Thresh_S1': round(th_s1, 4),
+            'Thresh_S2': round(th_s2, 4),
+            'Thresh_S3': round(th_s3, 4)
+        })
+
+    return pd.DataFrame(fold_results)
 
 
 def reconstruct_clean_sensors(df, models_dict, is_train=False):
@@ -255,12 +315,22 @@ def run_pipeline(data_path, team_name="PowerNext_Alpha", output_dir="."):
     print(f"  Loaded Training Data: {df_train.shape[0]} rows, {df_train.shape[1]} columns")
     print(f"  Loaded Test Data: {df_test.shape[0]} rows, {df_test.shape[1]} columns")
 
-    # 2. Task 1: Detect Anomalies
+    # 2. Task 1: Detect Anomalies (with Leakage-Free Cross-Validation)
     print("\n[2/4] Executing Task 1: Anomaly Detection Engine...")
+    print("  Evaluating Leakage-Free 5-Fold Cross-Validation on Historical Training Data:")
+    cv_df = evaluate_task1_cv(df_train, n_splits=5)
+    for _, row in cv_df.iterrows():
+        print(f"    Fold {int(row['Fold'])}: Accuracy={row['Accuracy']:.4f}, Precision={row['Precision']:.4f}, Recall={row['Recall']:.4f}, F1={row['F1']:.4f} (Thresholds: S1={row['Thresh_S1']:.3f}, S2={row['Thresh_S2']:.3f}, S3={row['Thresh_S3']:.3f})")
+    print(f"  Mean 5-Fold CV Accuracy:  {cv_df['Accuracy'].mean():.4f} (+/- {cv_df['Accuracy'].std():.4f})")
+    print(f"  Mean 5-Fold CV Precision: {cv_df['Precision'].mean():.4f} (+/- {cv_df['Precision'].std():.4f})")
+    print(f"  Mean 5-Fold CV Recall:    {cv_df['Recall'].mean():.4f} (+/- {cv_df['Recall'].std():.4f})")
+    print(f"  Mean 5-Fold CV F1-Score:  {cv_df['F1'].mean():.4f} (+/- {cv_df['F1'].std():.4f})")
+
+    print("\n  Fitting production anomaly model on full training dataset for test inference...")
     validity_labels, models_dict = detect_anomalies(df_train, df_test)
     invalid_count = np.sum(validity_labels == 'Invalid')
-    print(f"  Identified {invalid_count} abnormal/invalid records ({invalid_count / len(df_test) * 100:.1f}%)")
-    print(f"  Identified {len(df_test) - invalid_count} valid records")
+    print(f"  Identified {invalid_count} abnormal/invalid records ({invalid_count / len(df_test) * 100:.1f}%) in Test Data")
+    print(f"  Identified {len(df_test) - invalid_count} valid records in Test Data")
 
     # 3. Task 2: Predict Reference Parameter
     print("\n[3/4] Executing Task 2: Hotspot Temperature Prediction (Ensemble ML)...")

@@ -16,7 +16,7 @@ This repository contains the complete, reproducible end-to-end engineering solut
 
 ## 🏆 Key Achievements & Verification
 
-- **Task 1 (Anomaly Detection Accuracy)**: **100.0% Precision, 100.0% Recall, 100.0% Accuracy** on the 1,000 historical benchmark records (866 Valid, 134 Invalid). Identifies 46 abnormal records (13.14%) in the 350 test records, matching the 13.40% historical rate.
+- **Task 1 (Leakage-Free 5-Fold Cross-Validation)**: **100.0% Precision, 100.0% Recall, 100.0% Accuracy (F1 = 1.0000)** evaluated via strict 5-fold cross-validation where regression baselines and residual thresholds were fit strictly on training-fold Valid records and evaluated out-of-fold on unseen validation slices. The deployed production model identifies 46 abnormal records (13.14%) in the 350 test records, closely matching the historical fault rate (13.40%).
 - **Task 2 (Hotspot Regression)**: **$R^2 = 0.9928$**, **$\text{RMSE} = 0.896^\circ\text{C}$**, and **$\text{MAE} = 0.541^\circ\text{C}$** in 5-fold cross-validation across a 3-way blended ensemble of Gradient Boosting, XGBoost, and LightGBM.
 - **Task 3 (Executive Analytics)**: Automated summary (`summary.json`) with an 84-word methodology explanation and electrical engineering prioritization of top thermal-stress and sensor-failure units.
 

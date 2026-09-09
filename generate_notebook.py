@@ -70,14 +70,77 @@ print(corrs)
 cells.append(nbf.v4.new_markdown_cell("""## 2. Task 1: Identify Abnormal Records (Sensor Faults vs. Regime Shifts)
 Our empirical analysis revealed three distinct failure modes in the test bench data:
 1. **Channel Dropout**: Missing values ($NaN$) in essential sensors $S_1, S_2, S_3$.
-2. **Duplicate Operating Runs**: Identical operating inputs ($V, I, T_{amb}, t$) representing re-runs or logging errors.
+2. **Duplicate Operating Runs**: Identical operating inputs ($V, I, T_{amb}, t$) representing re-runs or logging collisions.
 3. **Physical Residual Anomalies**: Sensor spikes exceeding physical thermal conduction boundaries by $> 1.25\\times$ the baseline maximum residual.
+
+### 2.1 Leakage-Free 5-Fold Cross-Validation Evaluation
+To ensure rigorous, unbiased evaluation without data leakage:
+- For each fold, regression baselines ($S_1, S_2, S_3$) and anomaly thresholds ($\\tau_{S1}, \\tau_{S2}, \\tau_{S3}$) are fit **strictly on the training fold's Valid records**.
+- Precision, Recall, F1-Score, and Accuracy are evaluated on the **held-out validation fold** (containing both unseen Valid and Invalid records).
 """))
 
-cells.append(nbf.v4.new_code_cell("""op_features = ['Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C', 'Test_Duration_min']
+cells.append(nbf.v4.new_code_cell("""from sklearn.model_selection import KFold
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+
+op_features = ['Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C', 'Test_Duration_min']
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+cv_results = []
+
+for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
+    train_fold = df_train.iloc[train_idx]
+    val_fold = df_train.iloc[val_idx]
+    
+    # Fit ONLY on Valid records in the training fold
+    valid_train = train_fold[train_fold['Validity_Label'] == 'Valid']
+    lr_s1_f = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S1'])
+    lr_s2_f = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S2'])
+    lr_s3_f = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S3'])
+    
+    # Thresholds derived strictly from training fold valid residuals
+    th_s1_f = valid_train['Sensor_S1'].sub(lr_s1_f.predict(valid_train[op_features])).abs().max() * 1.25
+    th_s2_f = valid_train['Sensor_S2'].sub(lr_s2_f.predict(valid_train[op_features])).abs().max() * 1.25
+    th_s3_f = valid_train['Sensor_S3'].sub(lr_s3_f.predict(valid_train[op_features])).abs().max() * 1.25
+    
+    # Evaluate on held-out validation fold
+    res_s1_f = np.abs(val_fold['Sensor_S1'] - lr_s1_f.predict(val_fold[op_features]))
+    res_s2_f = np.abs(val_fold['Sensor_S2'] - lr_s2_f.predict(val_fold[op_features]))
+    res_s3_f = np.abs(val_fold['Sensor_S3'] - lr_s3_f.predict(val_fold[op_features]))
+    
+    nan_m = val_fold[['Sensor_S1', 'Sensor_S2', 'Sensor_S3']].isnull().any(axis=1)
+    dup_m = val_fold.duplicated(subset=op_features, keep=False) | val_fold[op_features].apply(tuple, axis=1).isin(train_fold[op_features].apply(tuple, axis=1))
+    spk_m = (res_s1_f > th_s1_f) | (res_s2_f > th_s2_f) | (res_s3_f > th_s3_f)
+    
+    pred_inv = nan_m | dup_m | spk_m
+    act_inv = (val_fold['Validity_Label'] == 'Invalid')
+    
+    cv_results.append({
+        'Fold': fold + 1,
+        'Accuracy': accuracy_score(act_inv, pred_inv),
+        'Precision': precision_score(act_inv, pred_inv),
+        'Recall': recall_score(act_inv, pred_inv),
+        'F1_Score': f1_score(act_inv, pred_inv),
+        'Thresh_S1': round(th_s1_f, 4),
+        'Thresh_S2': round(th_s2_f, 4),
+        'Thresh_S3': round(th_s3_f, 4)
+    })
+
+cv_df = pd.DataFrame(cv_results)
+print("=== Task 1: Leakage-Free 5-Fold Cross-Validation Results ===")
+print(cv_df.to_string(index=False))
+print("\\nMean 5-Fold CV Accuracy: ", f"{cv_df['Accuracy'].mean():.4f} (+/- {cv_df['Accuracy'].std():.4f})")
+print("Mean 5-Fold CV Precision:", f"{cv_df['Precision'].mean():.4f} (+/- {cv_df['Precision'].std():.4f})")
+print("Mean 5-Fold CV Recall:   ", f"{cv_df['Recall'].mean():.4f} (+/- {cv_df['Recall'].std():.4f})")
+print("Mean 5-Fold CV F1-Score: ", f"{cv_df['F1_Score'].mean():.4f} (+/- {cv_df['F1_Score'].std():.4f})")
+"""))
+
+cells.append(nbf.v4.new_markdown_cell("""### 2.2 Production Anomaly Model Fitting
+With out-of-fold generalization verified, the final production anomaly model is fitted on the full verified training set to maximize statistical sample support for test data inference.
+"""))
+
+cells.append(nbf.v4.new_code_cell("""# Final production model fit on full training data
 valid_clean = df_train[df_train['Validity_Label'] == 'Valid']
 
-# Train physical baseline models for sensors S1, S2, S3
 lr_s1 = LinearRegression().fit(valid_clean[op_features], valid_clean['Sensor_S1'])
 lr_s2 = LinearRegression().fit(valid_clean[op_features], valid_clean['Sensor_S2'])
 lr_s3 = LinearRegression().fit(valid_clean[op_features], valid_clean['Sensor_S3'])
@@ -86,23 +149,7 @@ th_s1 = valid_clean['Sensor_S1'].sub(lr_s1.predict(valid_clean[op_features])).ab
 th_s2 = valid_clean['Sensor_S2'].sub(lr_s2.predict(valid_clean[op_features])).abs().max() * 1.25
 th_s3 = valid_clean['Sensor_S3'].sub(lr_s3.predict(valid_clean[op_features])).abs().max() * 1.25
 
-print(f"Anomaly Detection Thresholds: S1={th_s1:.4f}°C, S2={th_s2:.4f}°C, S3={th_s3:.4f}°C")
-
-# Evaluate on Training Data to verify accuracy
-res_s1_tr = np.abs(df_train['Sensor_S1'] - lr_s1.predict(df_train[op_features]))
-res_s2_tr = np.abs(df_train['Sensor_S2'] - lr_s2.predict(df_train[op_features]))
-res_s3_tr = np.abs(df_train['Sensor_S3'] - lr_s3.predict(df_train[op_features]))
-
-nan_mask_tr = df_train[['Sensor_S1', 'Sensor_S2', 'Sensor_S3']].isnull().any(axis=1)
-dup_mask_tr = df_train.duplicated(subset=op_features, keep=False)
-spike_mask_tr = (res_s1_tr > th_s1) | (res_s2_tr > th_s2) | (res_s3_tr > th_s3)
-
-pred_invalid_tr = nan_mask_tr | dup_mask_tr | spike_mask_tr
-actual_invalid_tr = df_train['Validity_Label'] == 'Invalid'
-
-print("\\n=== Training Data Classification Metrics ===")
-print(confusion_matrix(actual_invalid_tr, pred_invalid_tr))
-print(classification_report(actual_invalid_tr, pred_invalid_tr, target_names=['Valid', 'Invalid'], digits=4))
+print(f"Production Thresholds: S1={th_s1:.4f}°C, S2={th_s2:.4f}°C, S3={th_s3:.4f}°C")
 """))
 
 cells.append(nbf.v4.new_code_cell("""# Apply Anomaly Engine to Test Data

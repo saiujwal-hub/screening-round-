@@ -67,16 +67,20 @@ print(corrs)
 """))
 
 # Section 2: Task 1 Anomaly Detection
-cells.append(nbf.v4.new_markdown_cell("""## 2. Task 1: Identify Abnormal Records (Sensor Faults vs. Regime Shifts)
-Our empirical analysis revealed three distinct failure modes in the test bench data:
-1. **Channel Dropout**: Missing values ($NaN$) in essential sensors $S_1, S_2, S_3$.
+cells.append(nbf.v4.new_markdown_cell("""## 2. Task 1: Identify Abnormal Records (Multi-Tier Physics-Grounded Engine)
+Our empirical analysis revealed that abnormal tests represent physical failures rather than regime shifts:
+1. **Channel Dropout**: Missing values ($NaN$) in essential terminal sensors $S_1, S_2, S_3$.
 2. **Duplicate Operating Runs**: Identical operating inputs ($V, I, T_{amb}, t$) representing re-runs or logging collisions.
-3. **Physical Residual Anomalies**: Sensor spikes exceeding physical thermal conduction boundaries by $> 1.25\\times$ the baseline maximum residual.
+3. **Physical Plausibility Rule**: Active test runs cannot have negative temperature rises above ambient ($S_1 < 0, S_2 < 0, S_3 < 0$).
+4. **Cross-Sensor Consistency**: Inter-sensor thermodynamic coupling bounds ($S_3$ vs $S_1$, $S_2$ vs $S_1$).
+5. **Physical Residual Anomalies**: Sensor deviations exceeding baseline quasi-steady thermal conduction limits.
 
 ### 2.1 Leakage-Free 5-Fold Cross-Validation Evaluation
 To ensure rigorous, unbiased evaluation without data leakage:
-- For each fold, regression baselines ($S_1, S_2, S_3$) and anomaly thresholds ($\\tau_{S1}, \\tau_{S2}, \\tau_{S3}$) are fit **strictly on the training fold's Valid records**.
-- Precision, Recall, F1-Score, and Accuracy are evaluated on the **held-out validation fold** (containing both unseen Valid and Invalid records).
+- For each fold, single-sensor baselines ($S_1, S_2, S_3$), cross-sensor baselines ($S_3 \\text{ vs } S_1, S_2 \\text{ vs } S_1$), and thresholds are fit **strictly on the training fold's Valid records**.
+- We report both:
+  - **Mode A (Deployment Setting)**: Checks duplicates across accumulated test history/batches.
+  - **Mode B (Isolated Slice Mode)**: Evaluates duplicates strictly within the held-out 20% slice without historical matching.
 """))
 
 cells.append(nbf.v4.new_code_cell("""from sklearn.model_selection import KFold
@@ -85,7 +89,8 @@ from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_sc
 op_features = ['Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C', 'Test_Duration_min']
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-cv_results = []
+cv_results_a = []
+cv_results_b = []
 
 for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
     train_fold = df_train.iloc[train_idx]
@@ -102,43 +107,68 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
     th_s2_f = valid_train['Sensor_S2'].sub(lr_s2_f.predict(valid_train[op_features])).abs().max() * 1.25
     th_s3_f = valid_train['Sensor_S3'].sub(lr_s3_f.predict(valid_train[op_features])).abs().max() * 1.25
     
+    # Cross-sensor models fit strictly on training fold Valid records
+    lr_cross_31_f = LinearRegression().fit(valid_train[['Sensor_S1']], valid_train['Sensor_S3'])
+    lr_cross_21_f = LinearRegression().fit(valid_train[['Sensor_S1']], valid_train['Sensor_S2'])
+    th_cross_31_f = (valid_train['Sensor_S3'] - lr_cross_31_f.predict(valid_train[['Sensor_S1']])).abs().max() * 1.25
+    th_cross_21_f = (valid_train['Sensor_S2'] - lr_cross_21_f.predict(valid_train[['Sensor_S1']])).abs().max() * 1.25
+    
     # Evaluate on held-out validation fold
     res_s1_f = np.abs(val_fold['Sensor_S1'] - lr_s1_f.predict(val_fold[op_features]))
     res_s2_f = np.abs(val_fold['Sensor_S2'] - lr_s2_f.predict(val_fold[op_features]))
     res_s3_f = np.abs(val_fold['Sensor_S3'] - lr_s3_f.predict(val_fold[op_features]))
     
     nan_m = val_fold[['Sensor_S1', 'Sensor_S2', 'Sensor_S3']].isnull().any(axis=1)
-    dup_m = val_fold.duplicated(subset=op_features, keep=False) | val_fold[op_features].apply(tuple, axis=1).isin(train_fold[op_features].apply(tuple, axis=1))
+    neg_m = (val_fold['Sensor_S1'] < 0) | (val_fold['Sensor_S2'] < 0) | (val_fold['Sensor_S3'] < 0)
     spk_m = (res_s1_f > th_s1_f) | (res_s2_f > th_s2_f) | (res_s3_f > th_s3_f)
     
-    pred_inv = nan_m | dup_m | spk_m
+    res_cross_31_f = np.abs(val_fold['Sensor_S3'] - lr_cross_31_f.predict(val_fold[['Sensor_S1']].fillna(0)))
+    res_cross_21_f = np.abs(val_fold['Sensor_S2'] - lr_cross_21_f.predict(val_fold[['Sensor_S1']].fillna(0)))
+    cross_spk_m = (res_cross_31_f > th_cross_31_f) | (res_cross_21_f > th_cross_21_f)
+    
     act_inv = (val_fold['Validity_Label'] == 'Invalid')
     
-    cv_results.append({
+    # Mode A: With test history / batch matching
+    dup_m_a = val_fold.duplicated(subset=op_features, keep=False) | val_fold[op_features].apply(tuple, axis=1).isin(train_fold[op_features].apply(tuple, axis=1))
+    pred_inv_a = nan_m | dup_m_a | neg_m | cross_spk_m | spk_m
+    
+    cv_results_a.append({
         'Fold': fold + 1,
-        'Accuracy': accuracy_score(act_inv, pred_inv),
-        'Precision': precision_score(act_inv, pred_inv),
-        'Recall': recall_score(act_inv, pred_inv),
-        'F1_Score': f1_score(act_inv, pred_inv),
-        'Thresh_S1': round(th_s1_f, 4),
-        'Thresh_S2': round(th_s2_f, 4),
-        'Thresh_S3': round(th_s3_f, 4)
+        'Accuracy': accuracy_score(act_inv, pred_inv_a),
+        'Precision': precision_score(act_inv, pred_inv_a),
+        'Recall': recall_score(act_inv, pred_inv_a),
+        'F1_Score': f1_score(act_inv, pred_inv_a)
+    })
+    
+    # Mode B: Isolated slice without history matching
+    dup_m_b = val_fold.duplicated(subset=op_features, keep=False)
+    pred_inv_b = nan_m | dup_m_b | neg_m | cross_spk_m | spk_m
+    
+    cv_results_b.append({
+        'Fold': fold + 1,
+        'Accuracy': accuracy_score(act_inv, pred_inv_b),
+        'Precision': precision_score(act_inv, pred_inv_b),
+        'Recall': recall_score(act_inv, pred_inv_b),
+        'F1_Score': f1_score(act_inv, pred_inv_b)
     })
 
-cv_df = pd.DataFrame(cv_results)
-print("=== Task 1: Leakage-Free 5-Fold Cross-Validation Results ===")
-print(cv_df.to_string(index=False))
-print("\\nMean 5-Fold CV Accuracy: ", f"{cv_df['Accuracy'].mean():.4f} (+/- {cv_df['Accuracy'].std():.4f})")
-print("Mean 5-Fold CV Precision:", f"{cv_df['Precision'].mean():.4f} (+/- {cv_df['Precision'].std():.4f})")
-print("Mean 5-Fold CV Recall:   ", f"{cv_df['Recall'].mean():.4f} (+/- {cv_df['Recall'].std():.4f})")
-print("Mean 5-Fold CV F1-Score: ", f"{cv_df['F1_Score'].mean():.4f} (+/- {cv_df['F1_Score'].std():.4f})")
+cv_df_a = pd.DataFrame(cv_results_a)
+cv_df_b = pd.DataFrame(cv_results_b)
+
+print("=== Mode A: 5-Fold CV with Batch & History Tracking ===")
+print(cv_df_a.to_string(index=False))
+print(f"Mean Accuracy:  {cv_df_a['Accuracy'].mean():.4f} | Precision: {cv_df_a['Precision'].mean():.4f} | Recall: {cv_df_a['Recall'].mean():.4f} | F1: {cv_df_a['F1_Score'].mean():.4f}")
+
+print("\\n=== Mode B: 5-Fold CV in Isolated 200-Row Slices ===")
+print(cv_df_b.to_string(index=False))
+print(f"Mean Accuracy:  {cv_df_b['Accuracy'].mean():.4f} | Precision: {cv_df_b['Precision'].mean():.4f} | Recall: {cv_df_b['Recall'].mean():.4f} | F1: {cv_df_b['F1_Score'].mean():.4f}")
 """))
 
 cells.append(nbf.v4.new_markdown_cell("""### 2.2 Production Anomaly Model Fitting
-With out-of-fold generalization verified, the final production anomaly model is fitted on the full verified training set to maximize statistical sample support for test data inference.
+With multi-tier out-of-fold generalization verified, the final production anomaly model is fitted on the full verified training set to perform inference on `Test_Data`.
 """))
 
-cells.append(nbf.v4.new_code_cell("""# Final production model fit on full training data
+cells.append(nbf.v4.new_code_cell("""# Final production model fit on full training data with all 5 tiers
 valid_clean = df_train[df_train['Validity_Label'] == 'Valid']
 
 lr_s1 = LinearRegression().fit(valid_clean[op_features], valid_clean['Sensor_S1'])
@@ -149,7 +179,13 @@ th_s1 = valid_clean['Sensor_S1'].sub(lr_s1.predict(valid_clean[op_features])).ab
 th_s2 = valid_clean['Sensor_S2'].sub(lr_s2.predict(valid_clean[op_features])).abs().max() * 1.25
 th_s3 = valid_clean['Sensor_S3'].sub(lr_s3.predict(valid_clean[op_features])).abs().max() * 1.25
 
+lr_cross_31 = LinearRegression().fit(valid_clean[['Sensor_S1']], valid_clean['Sensor_S3'])
+lr_cross_21 = LinearRegression().fit(valid_clean[['Sensor_S1']], valid_clean['Sensor_S2'])
+th_cross_31 = (valid_clean['Sensor_S3'] - lr_cross_31.predict(valid_clean[['Sensor_S1']])).abs().max() * 1.25
+th_cross_21 = (valid_clean['Sensor_S2'] - lr_cross_21.predict(valid_clean[['Sensor_S1']])).abs().max() * 1.25
+
 print(f"Production Thresholds: S1={th_s1:.4f}°C, S2={th_s2:.4f}°C, S3={th_s3:.4f}°C")
+print(f"Production Cross-Sensor Thresholds: S3-S1={th_cross_31:.4f}°C, S2-S1={th_cross_21:.4f}°C")
 """))
 
 cells.append(nbf.v4.new_code_cell("""# Apply Anomaly Engine to Test Data

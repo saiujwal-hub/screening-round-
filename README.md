@@ -26,10 +26,12 @@ This repository contains the complete, reproducible end-to-end engineering solut
 
 1. **Joule Dissipation Dominance**: Hotspot temperature rise is strongly driven by $P = I^2 R$ ($r = 0.927$) and conductive heat transfer to load terminal $S_2$ ($r = 0.795$).
 2. **Auxiliary Sensor Pruning**: Sensor $S_4$ was verified as uninformative noise ($r = -0.0085$) and pruned to prevent overfitting on unseen test distributions.
-3. **Deterministic 3-Tier Anomaly Filter**:
+3. **Five-Tier Physics-Grounded Anomaly Engine**:
    - **Tier 1**: Missing values ($NaN$) on essential terminal probes $S_1, S_2, S_3$.
    - **Tier 2**: Duplicate test vectors $[V, I, T_{amb}, t]$ resulting from data-logging repetitions.
-   - **Tier 3**: Sensor residuals deviating by $> 1.25\times$ baseline measurement tolerance from physical conduction equations.
+   - **Tier 3**: Physical Plausibility Rule: Temperature rise cannot be negative ($S_i < 0$) in active tests.
+   - **Tier 4**: Cross-Sensor Consistency: Inter-sensor coupling limits between terminal probes ($S_3$ vs $S_1$, $S_2$ vs $S_1$).
+   - **Tier 5**: Single-sensor residuals deviating by $> 1.25\times$ baseline measurement tolerance from physical conduction equations.
 4. **Virtual Sensor Imputation**: Corrupted or dropped sensor channels are automatically estimated using thermodynamic conduction baselines before feeding into the regression models.
 
 ---

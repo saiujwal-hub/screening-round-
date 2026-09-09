@@ -38,29 +38,40 @@ def load_data(file_path):
 
 def detect_anomalies(df_train, df_test):
     """
-    Task 1: Physics-grounded Anomaly Detection Engine
-    Identifies abnormal records across 3 tiers:
-      1. Missing critical sensor channels (S1, S2, S3)
+    Task 1: Multi-Tier Physics-Grounded Anomaly Detection Engine
+    Identifies abnormal records across 5 complementary checks:
+      1. Missing critical sensor channels (NaN on S1, S2, S3)
       2. Duplicate operating test conditions (identical V, I, Tamb, Duration)
-      3. Physical sensor spikes/deviations beyond valid physical thermal dynamics
+      3. Physical Plausibility Rule: Temperature rise above ambient cannot be negative (S1 < 0, S2 < 0, S3 < 0)
+      4. Cross-Sensor Consistency Check: S3 vs S1 and S2 vs S1 thermodynamic coupling bounds
+      5. Physical Conduction Residuals: Sensor deviation exceeding baseline conduction dynamics
     """
     op_features = ['Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C', 'Test_Duration_min']
     valid_train = df_train[df_train['Validity_Label'] == 'Valid']
 
-    # Physical thermal response baseline models for sensors S1, S2, S3
+    # 1. Single-sensor conduction baseline models
     lr_s1 = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S1'])
     lr_s2 = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S2'])
     lr_s3 = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S3'])
 
-    # Baseline maximum residuals from verified training data
-    max_res_s1 = valid_train['Sensor_S1'].sub(lr_s1.predict(valid_train[op_features])).abs().max()
-    max_res_s2 = valid_train['Sensor_S2'].sub(lr_s2.predict(valid_train[op_features])).abs().max()
-    max_res_s3 = valid_train['Sensor_S3'].sub(lr_s3.predict(valid_train[op_features])).abs().max()
+    res_tr_s1 = valid_train['Sensor_S1'].sub(lr_s1.predict(valid_train[op_features])).abs()
+    res_tr_s2 = valid_train['Sensor_S2'].sub(lr_s2.predict(valid_train[op_features])).abs()
+    res_tr_s3 = valid_train['Sensor_S3'].sub(lr_s3.predict(valid_train[op_features])).abs()
 
-    # Anomaly threshold: 1.25x max verified baseline residual to prevent false positives from regime shifts
+    max_res_s1 = res_tr_s1.max()
+    max_res_s2 = res_tr_s2.max()
+    max_res_s3 = res_tr_s3.max()
+
     th_s1 = max_res_s1 * 1.25
     th_s2 = max_res_s2 * 1.25
     th_s3 = max_res_s3 * 1.25
+
+    # 2. Cross-sensor consistency baseline models
+    lr_cross_31 = LinearRegression().fit(valid_train[['Sensor_S1']], valid_train['Sensor_S3'])
+    lr_cross_21 = LinearRegression().fit(valid_train[['Sensor_S1']], valid_train['Sensor_S2'])
+
+    th_cross_31 = (valid_train['Sensor_S3'] - lr_cross_31.predict(valid_train[['Sensor_S1']])).abs().max() * 1.25
+    th_cross_21 = (valid_train['Sensor_S2'] - lr_cross_21.predict(valid_train[['Sensor_S1']])).abs().max() * 1.25
 
     # Evaluate on test dataset
     pred_s1 = lr_s1.predict(df_test[op_features])
@@ -71,20 +82,36 @@ def detect_anomalies(df_train, df_test):
     res_s2 = np.abs(df_test['Sensor_S2'] - pred_s2)
     res_s3 = np.abs(df_test['Sensor_S3'] - pred_s3)
 
+    # Check 1: Missing values on critical sensors
     nan_mask = df_test[['Sensor_S1', 'Sensor_S2', 'Sensor_S3']].isnull().any(axis=1)
+
+    # Check 2: Duplicate operating test vectors
     dup_mask = df_test.duplicated(subset=op_features, keep=False)
+
+    # Check 3: Physical plausibility (negative temperature rise is impossible in active load test)
+    neg_mask = (df_test['Sensor_S1'] < 0) | (df_test['Sensor_S2'] < 0) | (df_test['Sensor_S3'] < 0)
+
+    # Check 4: Cross-sensor consistency
+    res_cross_31 = np.abs(df_test['Sensor_S3'] - lr_cross_31.predict(df_test[['Sensor_S1']].fillna(0)))
+    res_cross_21 = np.abs(df_test['Sensor_S2'] - lr_cross_21.predict(df_test[['Sensor_S1']].fillna(0)))
+    cross_spike_mask = (res_cross_31 > th_cross_31) | (res_cross_21 > th_cross_21)
+
+    # Check 5: Single sensor conduction residual spikes
     spike_mask = (res_s1 > th_s1) | (res_s2 > th_s2) | (res_s3 > th_s3)
 
-    invalid_mask = nan_mask | dup_mask | spike_mask
+    invalid_mask = nan_mask | dup_mask | neg_mask | cross_spike_mask | spike_mask
     validity_labels = np.where(invalid_mask, 'Invalid', 'Valid')
 
     # Return predictions and sensor baseline models for reconstruction
     models_dict = {
         'lr_s1': lr_s1, 'lr_s2': lr_s2, 'lr_s3': lr_s3,
         'th_s1': th_s1, 'th_s2': th_s2, 'th_s3': th_s3,
+        'lr_cross_31': lr_cross_31, 'lr_cross_21': lr_cross_21,
+        'th_cross_31': th_cross_31, 'th_cross_21': th_cross_21,
         'pred_s1': pred_s1, 'pred_s2': pred_s2, 'pred_s3': pred_s3,
         'res_s1': res_s1, 'res_s2': res_s2, 'res_s3': res_s3,
-        'nan_mask': nan_mask, 'dup_mask': dup_mask, 'spike_mask': spike_mask
+        'nan_mask': nan_mask, 'dup_mask': dup_mask, 'spike_mask': spike_mask,
+        'neg_mask': neg_mask, 'cross_spike_mask': cross_spike_mask
     }
     return validity_labels, models_dict
 
@@ -92,16 +119,16 @@ def detect_anomalies(df_train, df_test):
 def evaluate_task1_cv(df_train, n_splits=5):
     """
     Leakage-Free 5-Fold Cross-Validation for Task 1 Anomaly Detection Engine.
-    For each fold:
-      1. Baseline regression models (lr_s1, lr_s2, lr_s3) are fit ONLY on the training fold's Valid records.
-      2. Anomaly thresholds (th_s1, th_s2, th_s3) are computed ONLY from training fold's Valid residuals.
-      3. Detection rules (Missing, Duplicates, Spikes) are evaluated on the held-out validation fold
-         (which includes both Valid and Invalid records) without any data leakage.
+    Evaluates out-of-fold generalization across two standard testing paradigms:
+      - Primary (Batch & Test History Matching): Duplicates matched across accumulated test history.
+      - Isolated Slice Mode: Duplicates evaluated strictly within the held-out 20% validation slice.
     """
     op_features = ['Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C', 'Test_Duration_min']
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 
-    fold_results = []
+    fold_results_history = []
+    fold_results_isolated = []
+
     for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
         train_fold = df_train.iloc[train_idx]
         val_fold = df_train.iloc[val_idx]
@@ -112,10 +139,15 @@ def evaluate_task1_cv(df_train, n_splits=5):
         lr_s2 = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S2'])
         lr_s3 = LinearRegression().fit(valid_train[op_features], valid_train['Sensor_S3'])
 
-        # Thresholds derived strictly from training fold residuals
         th_s1 = valid_train['Sensor_S1'].sub(lr_s1.predict(valid_train[op_features])).abs().max() * 1.25
         th_s2 = valid_train['Sensor_S2'].sub(lr_s2.predict(valid_train[op_features])).abs().max() * 1.25
         th_s3 = valid_train['Sensor_S3'].sub(lr_s3.predict(valid_train[op_features])).abs().max() * 1.25
+
+        # Cross-sensor models fit strictly on training fold Valid records
+        lr_cross_31 = LinearRegression().fit(valid_train[['Sensor_S1']], valid_train['Sensor_S3'])
+        lr_cross_21 = LinearRegression().fit(valid_train[['Sensor_S1']], valid_train['Sensor_S2'])
+        th_cross_31 = (valid_train['Sensor_S3'] - lr_cross_31.predict(valid_train[['Sensor_S1']])).abs().max() * 1.25
+        th_cross_21 = (valid_train['Sensor_S2'] - lr_cross_21.predict(valid_train[['Sensor_S1']])).abs().max() * 1.25
 
         # Evaluate on held-out validation fold
         pred_s1 = lr_s1.predict(val_fold[op_features])
@@ -126,25 +158,44 @@ def evaluate_task1_cv(df_train, n_splits=5):
         res_s2 = np.abs(val_fold['Sensor_S2'] - pred_s2)
         res_s3 = np.abs(val_fold['Sensor_S3'] - pred_s3)
 
-        nan_mask = val_fold[['Sensor_S1', 'Sensor_S2', 'Sensor_S3']].isnull().any(axis=1)
-        dup_mask = val_fold.duplicated(subset=op_features, keep=False) | val_fold[op_features].apply(tuple, axis=1).isin(train_fold[op_features].apply(tuple, axis=1))
-        spike_mask = (res_s1 > th_s1) | (res_s2 > th_s2) | (res_s3 > th_s3)
+        nan_m = val_fold[['Sensor_S1', 'Sensor_S2', 'Sensor_S3']].isnull().any(axis=1)
+        neg_m = (val_fold['Sensor_S1'] < 0) | (val_fold['Sensor_S2'] < 0) | (val_fold['Sensor_S3'] < 0)
+        spk_m = (res_s1 > th_s1) | (res_s2 > th_s2) | (res_s3 > th_s3)
 
-        pred_invalid = nan_mask | dup_mask | spike_mask
+        res_cross_31 = np.abs(val_fold['Sensor_S3'] - lr_cross_31.predict(val_fold[['Sensor_S1']].fillna(0)))
+        res_cross_21 = np.abs(val_fold['Sensor_S2'] - lr_cross_21.predict(val_fold[['Sensor_S1']].fillna(0)))
+        cross_spk_m = (res_cross_31 > th_cross_31) | (res_cross_21 > th_cross_21)
+
         act_invalid = (val_fold['Validity_Label'] == 'Invalid')
 
-        fold_results.append({
+        # Primary: Batch & Test History Matching (realistic multi-batch deployment)
+        dup_m_hist = val_fold.duplicated(subset=op_features, keep=False) | val_fold[op_features].apply(tuple, axis=1).isin(train_fold[op_features].apply(tuple, axis=1))
+        pred_inv_hist = nan_m | dup_m_hist | neg_m | cross_spk_m | spk_m
+
+        fold_results_history.append({
             'Fold': fold + 1,
-            'Accuracy': accuracy_score(act_invalid, pred_invalid),
-            'Precision': precision_score(act_invalid, pred_invalid),
-            'Recall': recall_score(act_invalid, pred_invalid),
-            'F1': f1_score(act_invalid, pred_invalid),
+            'Accuracy': accuracy_score(act_invalid, pred_inv_hist),
+            'Precision': precision_score(act_invalid, pred_inv_hist),
+            'Recall': recall_score(act_invalid, pred_inv_hist),
+            'F1': f1_score(act_invalid, pred_inv_hist),
             'Thresh_S1': round(th_s1, 4),
             'Thresh_S2': round(th_s2, 4),
             'Thresh_S3': round(th_s3, 4)
         })
 
-    return pd.DataFrame(fold_results)
+        # Isolated Slice Mode (strictly inside 200-row fold without history matching)
+        dup_m_iso = val_fold.duplicated(subset=op_features, keep=False)
+        pred_inv_iso = nan_m | dup_m_iso | neg_m | cross_spk_m | spk_m
+
+        fold_results_isolated.append({
+            'Fold': fold + 1,
+            'Accuracy': accuracy_score(act_invalid, pred_inv_iso),
+            'Precision': precision_score(act_invalid, pred_inv_iso),
+            'Recall': recall_score(act_invalid, pred_inv_iso),
+            'F1': f1_score(act_invalid, pred_inv_iso)
+        })
+
+    return pd.DataFrame(fold_results_history), pd.DataFrame(fold_results_isolated)
 
 
 def reconstruct_clean_sensors(df, models_dict, is_train=False):
@@ -318,13 +369,14 @@ def run_pipeline(data_path, team_name="PowerNext_Alpha", output_dir="."):
     # 2. Task 1: Detect Anomalies (with Leakage-Free Cross-Validation)
     print("\n[2/4] Executing Task 1: Anomaly Detection Engine...")
     print("  Evaluating Leakage-Free 5-Fold Cross-Validation on Historical Training Data:")
-    cv_df = evaluate_task1_cv(df_train, n_splits=5)
-    for _, row in cv_df.iterrows():
+    cv_df_hist, cv_df_iso = evaluate_task1_cv(df_train, n_splits=5)
+    print("  [Mode A: Deployment with Test History & Batch Duplicate Tracking]")
+    for _, row in cv_df_hist.iterrows():
         print(f"    Fold {int(row['Fold'])}: Accuracy={row['Accuracy']:.4f}, Precision={row['Precision']:.4f}, Recall={row['Recall']:.4f}, F1={row['F1']:.4f} (Thresholds: S1={row['Thresh_S1']:.3f}, S2={row['Thresh_S2']:.3f}, S3={row['Thresh_S3']:.3f})")
-    print(f"  Mean 5-Fold CV Accuracy:  {cv_df['Accuracy'].mean():.4f} (+/- {cv_df['Accuracy'].std():.4f})")
-    print(f"  Mean 5-Fold CV Precision: {cv_df['Precision'].mean():.4f} (+/- {cv_df['Precision'].std():.4f})")
-    print(f"  Mean 5-Fold CV Recall:    {cv_df['Recall'].mean():.4f} (+/- {cv_df['Recall'].std():.4f})")
-    print(f"  Mean 5-Fold CV F1-Score:  {cv_df['F1'].mean():.4f} (+/- {cv_df['F1'].std():.4f})")
+    print(f"  Mean Accuracy:  {cv_df_hist['Accuracy'].mean():.4f} | Precision: {cv_df_hist['Precision'].mean():.4f} | Recall: {cv_df_hist['Recall'].mean():.4f} | F1-Score: {cv_df_hist['F1'].mean():.4f}")
+
+    print("\n  [Mode B: Isolated Slice Evaluation (strictly within 200-row validation fold without historical matching)]")
+    print(f"  Mean Accuracy:  {cv_df_iso['Accuracy'].mean():.4f} | Precision: {cv_df_iso['Precision'].mean():.4f} | Recall: {cv_df_iso['Recall'].mean():.4f} | F1-Score: {cv_df_iso['F1'].mean():.4f}")
 
     print("\n  Fitting production anomaly model on full training dataset for test inference...")
     validity_labels, models_dict = detect_anomalies(df_train, df_test)

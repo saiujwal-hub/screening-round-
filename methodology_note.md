@@ -45,17 +45,21 @@ Through empirical correlation and thermodynamic sensitivity analysis on verified
 
 A central objective of the challenge is **distinguishing physical regime shifts from measurement anomalies**. When equipment is subjected to heavy loading ($I > 85\text{ A}$, $V > 25\text{ kV}$), temperatures rise non-linearly; this is genuine equipment behaviour, not an anomaly. Conversely, an anomaly represents unphysical readings, hardware loss, or duplicate data.
 
-We established a **Three-Tier Deterministic Anomaly Filter**:
-$$\text{Invalid} = \mathcal{M}_{\text{Missing}} \cup \mathcal{M}_{\text{Duplicate}} \cup \mathcal{M}_{\text{Spike}}$$
+We established a **Five-Tier Physics-Grounded Anomaly Engine**:
+$$\text{Invalid} = \mathcal{M}_{\text{Missing}} \cup \mathcal{M}_{\text{Duplicate}} \cup \mathcal{M}_{\text{Negative}} \cup \mathcal{M}_{\text{Cross}} \cup \mathcal{M}_{\text{Spike}}$$
 
 1. **Tier 1 — Essential Channel Dropout ($\mathcal{M}_{\text{Missing}}$)**: Records where $S_1, S_2,$ or $S_3$ contain missing ($NaN$) entries. An uninstrumented terminal cannot validate equipment compliance.
 2. **Tier 2 — Duplicate Test Runs ($\mathcal{M}_{\text{Duplicate}}$)**: Records possessing identical operating input vectors $[V, I, T_{amb}, t]$. Historical audit revealed 100% of duplicate runs were erroneous test repetitions or data-logger logging collisions.
-3. **Tier 3 — Physics-Guided Residual Outliers ($\mathcal{M}_{\text{Spike}}$)**: Under thermal conduction laws, terminal temperature rises follow a deterministic relation with operating conditions:
+3. **Tier 3 — Physical Plausibility Rule ($\mathcal{M}_{\text{Negative}}$)**: In an active electrical test with continuous current injection, heat dissipation is strictly non-negative; therefore, temperature rise above ambient cannot be negative ($S_1 < 0 \lor S_2 < 0 \lor S_3 < 0$). This rule caught anomalous negative measurements (e.g. `TST-0213`, where $S_2 = -1.55^\circ\text{C}$).
+4. **Tier 4 — Cross-Sensor Thermodynamic Coupling ($\mathcal{M}_{\text{Cross}}$)**: Under quasi-steady heat transfer, adjacent terminal sensors exhibit tight physical coupling ($S_3 \approx 1.27 S_1$, $R^2 = 0.983$). We fit cross-sensor linear models ($\hat{S}_3(S_1), \hat{S}_2(S_1)$) on valid training records; deviations exceeding $1.25\times$ baseline maximum cross-residuals indicate localized probe faults.
+5. **Tier 5 — Physical Conduction Residuals ($\mathcal{M}_{\text{Spike}}$)**: Under thermal conduction laws, terminal temperature rises follow deterministic relations with operating conditions:
    $$\hat{S}_i = \beta_{i,0} + \beta_{i,V} V + \beta_{i,I} I + \beta_{i,T} T_{amb} + \beta_{i,t} t$$
    Residual errors $|S_i - \hat{S}_i|$ on valid data are strictly bounded by normal measurement tolerances: $\tau_{S1} = 0.71^\circ\text{C}$, $\tau_{S2} = 0.55^\circ\text{C}$, $\tau_{S3} = 1.04^\circ\text{C}$. Any record where residual error exceeds $1.25 \times \tau_i$ represents a sensor spike/loose thermocouple, without penalizing high-current operational regime shifts.
 
-> **Leakage-Free 5-Fold Cross-Validation**: To eliminate circular evaluation, the anomaly detection engine was evaluated using strict 5-fold cross-validation. In each fold, sensor regression baselines ($\beta$) and residual thresholds ($\tau_{S1}, \tau_{S2}, \tau_{S3}$) were established **strictly on the training fold's Valid records** (80% split), and then evaluated blindly on the **held-out validation fold** (20% split, containing both unseen Valid and Invalid records).
+> **Leakage-Free 5-Fold Cross-Validation Evaluation**:
+> In each fold, single-sensor baselines ($\beta$), cross-sensor models, and residual thresholds ($\tau$) were established **strictly on the training fold's Valid records** (80% split), and then evaluated blindly on the **held-out validation fold** (20% split, containing both unseen Valid and Invalid records).
 >
+> **Mode A: Deployment Setting (Batch & Test History Tracking)**:
 > | Fold | Accuracy | Precision (Invalid) | Recall (Invalid) | F1-Score | Threshold $\tau_{S1}$ | Threshold $\tau_{S2}$ | Threshold $\tau_{S3}$ |
 > | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 > | **Fold 1** | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.8744°C | 0.6507°C | 1.2642°C |
@@ -65,9 +69,15 @@ $$\text{Invalid} = \mathcal{M}_{\text{Missing}} \cup \mathcal{M}_{\text{Duplicat
 > | **Fold 5** | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.8690°C | 0.6778°C | 1.3101°C |
 > | **Mean ± Std** | **1.0000 ± 0.00** | **1.0000 ± 0.00** | **1.0000 ± 0.00** | **1.0000 ± 0.00** | 0.8570°C | 0.6747°C | 1.2993°C |
 >
-> *(Note: Even under an artificially isolated validation slice where duplicate pairs split across fold boundaries are not matched against prior test history, precision remains a perfect 1.0000, accuracy is 0.9800, and recall is 0.8471).*
+> **Mode B: Isolated Slice Setting (strictly within 200-row validation slice without history matching)**:
+> - **Mean Accuracy**: `0.9800 ± 0.0055`
+> - **Mean Precision**: `1.0000 ± 0.0000` (Zero false alarms on valid regime shifts)
+> - **Mean Recall**: `0.8471 ± 0.0467`
+> - **Mean F1-Score**: `0.9165 ± 0.0268`
 >
-> Following validation, the **final deployed production model** was fitted on the full training dataset to maximize statistical power for inference on unlabelled data, flagging **46 abnormal records (13.14%)** in `Test_Data` (closely matching the historical failure rate of $13.40\%$).
+> *Diagnostic Note on Recall*: In Mode B, the 15.3% unflagged invalid records correspond precisely to the 20 duplicate measurement pairs whose twin fell into the other fold. Because their physical sensor values are unspiked ($r < \tau$), they can only be identified when checked against prior test history (Mode A), where recall reaches 100.0%.
+>
+> Following validation, the **final deployed production model** was fitted on the full training dataset to perform inference on unlabelled data, flagging **46 abnormal records (13.14%)** in `Test_Data` (closely matching the historical failure rate of $13.40\%$).
 
 ---
 

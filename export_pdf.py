@@ -56,6 +56,12 @@ def generate_methodology_pdf(
         border-bottom: 1px solid #e2e8f0;
         padding-bottom: 2px;
     }}
+    h3 {{
+        font-size: 9.6pt;
+        margin: 4px 0 2px 0;
+        color: #1e293b;
+        font-weight: 600;
+    }}
     p {{
         margin: 3px 0 4px 0;
     }}

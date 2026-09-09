@@ -8,7 +8,7 @@ cells = []
 cells.append(nbf.v4.new_markdown_cell("""# PowerNext-AI Screening Round Challenge
 ### The Black-Box Test Bench Challenge: Can You Discover What the Data Is Telling You?
 **Organized by:** Central Power Research Institute (CPRI) & Manipal Institute of Technology (MIT) Bengaluru  
-**Authors:** Team PowerNext Alpha
+**Authors:** Team og (Sai Ujwal Meesala — Team Leader, Yuvan Reddy Vadde, Samartha Dayananda, Akash Kulkarni, Kaavya Janagan)
 
 ---
 ## Pipeline Overview
@@ -487,8 +487,8 @@ df_test['Predicted_Reference_Parameter'] = np.round(test_predictions, 4)
 
 # Export <TeamName>.csv
 submission_df = df_test[['Test_ID', 'Predicted_Reference_Parameter', 'Validity_Label']]
-submission_df.to_csv("PowerNext_Alpha.csv", index=False)
-print("Saved PowerNext_Alpha.csv successfully! (350 rows)")
+submission_df.to_csv("og.csv", index=False)
+print("Saved og.csv successfully! (350 rows)")
 submission_df.head(10)
 """))
 

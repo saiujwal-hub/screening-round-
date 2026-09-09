@@ -649,7 +649,7 @@ def generate_summary(df_test, predictions, validity_labels, models_dict):
     return summary_data
 
 
-def run_pipeline(data_path, team_name="PowerNext_Alpha", output_dir=".", verbose=True):
+def run_pipeline(data_path, team_name="og", output_dir=".", verbose=True):
     """
     Executes the complete screening solution pipeline.
     Surfaces informative error diagnostics to stderr if validation fails.
@@ -892,7 +892,7 @@ if __name__ == "__main__":
                         help="Optional positional path to participant dataset Excel or folder")
     parser.add_argument("--data-path", type=str, default="CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx",
                         help="Path to participant dataset Excel or folder")
-    parser.add_argument("--team-name", type=str, default="PowerNext_Alpha",
+    parser.add_argument("--team-name", type=str, default="og",
                         help="Team name used for deliverable files")
     parser.add_argument("--output-dir", type=str, default=".",
                         help="Directory to save output files")

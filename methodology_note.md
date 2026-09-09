@@ -1,5 +1,6 @@
 # CPRI State-Level Hackathon — Screening Round Methodology Note
-**Challenge**: The Black-Box Test Bench Challenge | **Team**: PowerNext Alpha | **Date**: September 2026
+**Challenge**: The Black-Box Test Bench Challenge | **Team**: og | **Date**: September 2026  
+**Team Members**: Sai Ujwal Meesala (Team Leader), Yuvan Reddy Vadde, Samartha Dayananda, Akash Kulkarni, Kaavya Janagan
 
 ---
 

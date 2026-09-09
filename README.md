@@ -1,8 +1,13 @@
 # PowerNext-AI Screening Round Challenge
 ### The Black-Box Test Bench Challenge: Can You Discover What the Data Is Telling You?
 **Organizers:** Central Power Research Institute (CPRI) & Manipal Institute of Technology (MIT) Bengaluru  
-**Team Name:** PowerNext Alpha  
-**Author:** Sai Ujwal  
+**Team Name:** og  
+**Team Members:**  
+- **Sai Ujwal Meesala** (Team Leader)  
+- **Yuvan Reddy Vadde**  
+- **Samartha Dayananda**  
+- **Akash Kulkarni**  
+- **Kaavya Janagan**  
 
 ---
 
@@ -10,7 +15,7 @@
 This repository contains the complete, reproducible end-to-end engineering solution for the **PowerNext-AI Screening Round Challenge**. The challenge requires analyzing electrical test bench data to:
 1. **Task 1: Identify Abnormal Records** — Classify tests as `Valid` or `Invalid` by isolating sensor malfunctions, missing channels, duplicates, and sensor spikes while preserving genuine high-load physical regime shifts.
 2. **Task 2: Predict Reference Parameter** — Accurately predict the critical hotspot temperature rise (`Reference_Parameter`) across all hidden test records using a physics-informed machine learning ensemble.
-3. **Task 3: Automated Test Summary** — Programmatically generate fleet-level analytics (`summary.json`), identify high-attention test units, and document the methodology.
+3. **Task 3: Automated Test Summary** — Programmatically generate fleet-level analytics (`summary.json` & `summary.csv`), identify high-attention test units, and document the methodology.
 
 ---
 
@@ -18,7 +23,7 @@ This repository contains the complete, reproducible end-to-end engineering solut
 
 - **Task 1 (Leakage-Free 5-Fold Cross-Validation)**: Evaluated out-of-fold strictly within held-out validation slices with no cross-fold history matching (mirroring deployed conditions, as zero of 350 real `Test_Data` records share operating conditions with training data), the Task 1 anomaly detector achieves **Accuracy: 98.0%**, **Precision: 100.0%**, **Recall: 84.7%**, and **F1-Score: 0.9165**. On the 350-record `Test_Data` submission, it identifies **46 abnormal records (13.14%)**, matching the historical defect rate (13.40%). The two new detection tiers (physical plausibility, cross-sensor consistency) did not change any labels on the actual 350-record `Test_Data` submission versus the original single-tier check — they exist as defensive depth for the hidden/second dataset, not as a demonstrated improvement on this specific submission.
 - **Task 2 (Hotspot Regression)**: **$R^2 = 0.9928$**, **$\text{RMSE} = 0.896^\circ\text{C}$**, and **$\text{MAE} = 0.541^\circ\text{C}$** in 5-fold cross-validation across a 3-way blended ensemble of Gradient Boosting, XGBoost, and LightGBM.
-- **Task 3 (Executive Analytics)**: Automated summary (`summary.json`) with an 84-word methodology explanation and electrical engineering prioritization of top thermal-stress and sensor-failure units.
+- **Task 3 (Executive Analytics)**: Automated summary (`summary.json` & `summary.csv`) with an 84-word methodology explanation and electrical engineering prioritization of top thermal-stress and sensor-failure units.
 - **Defensive Engineering & Robustness Stress Testing**: **8/8 Checks Passed (100% Success)** under synthetic fault injection (5% NaNs per operating parameter column + 5% duplicate rows). Confirmed zero NaN predictions, 100% invalid flagging for injected corruptions, and loud diagnostic schema validation on missing sheets or columns.
 
 ---
@@ -43,8 +48,9 @@ This repository contains the complete, reproducible end-to-end engineering solut
 
 ```
 ├── CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx  # Official hackathon dataset
-├── PowerNext_Alpha.csv                               # Submission predictions (350 test records)
+├── og.csv                                            # Submission predictions (350 test records)
 ├── summary.json                                      # Task 3 automated executive summary
+├── summary.csv                                       # Task 3 automated tabular summary
 ├── solution_pipeline.py                              # Fully autonomous CLI pipeline
 ├── solution_notebook.ipynb                           # Pre-rendered interactive Jupyter notebook
 ├── methodology_note.md                               # Concise 2-page engineering note (verified <= 2 pages)
@@ -52,7 +58,7 @@ This repository contains the complete, reproducible end-to-end engineering solut
 ├── task1_regime_vs_anomaly.png                       # Task 1 core insight figure (300 DPI)
 ├── export_pdf.py                                     # PDF generator & page-count verifier script
 ├── package_submission.py                             # Deliverable validation and packaging script
-├── powernext-alpha-submission.zip                    # Ready-to-upload ZIP package for Unstop (enclosing PowerNext_Alpha/)
+├── og-submission.zip                                 # Ready-to-upload ZIP package for Unstop (enclosing og/)
 └── README.md                                         # Project documentation
 ```
 
@@ -69,7 +75,7 @@ pip install pandas numpy scikit-learn xgboost lightgbm openpyxl matplotlib
 ### 2. Run Autonomous Pipeline
 Execute the pipeline script to reproduce all predictions and summary metrics:
 ```bash
-python solution_pipeline.py --team-name PowerNext_Alpha --data-path CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx
+python solution_pipeline.py --team-name og --data-path CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx
 ```
 
 ### 3. Run Synthetic Robustness Stress Test

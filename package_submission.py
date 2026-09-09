@@ -12,8 +12,8 @@ import json
 import pandas as pd
 
 
-def create_submission_package(team_name="powernext-alpha", output_dir="."):
-    csv_file = "PowerNext_Alpha.csv"
+def create_submission_package(team_name="og", output_dir="."):
+    csv_file = f"{team_name}.csv" if os.path.exists(os.path.join(output_dir, f"{team_name}.csv")) else "og.csv"
     summary_file = "summary.json"
     script_file = "solution_pipeline.py"
     notebook_file = "solution_notebook.ipynb"
@@ -63,7 +63,7 @@ def create_submission_package(team_name="powernext-alpha", output_dir="."):
     print("  Summary JSON validation passed!")
 
     # Create ZIP archive with deliverables enclosed in a team-named subfolder
-    subfolder_name = "PowerNext_Alpha"
+    subfolder_name = team_name
     zip_filename = os.path.join(output_dir, f"{team_name}-submission.zip")
     with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for fname in files_to_pack:

@@ -9,6 +9,7 @@ Validates all required deliverables and creates the final submission ZIP archive
 import os
 import zipfile
 import json
+import numpy as np
 import pandas as pd
 
 
@@ -40,14 +41,21 @@ def create_submission_package(team_name="og", output_dir="."):
     if not all_present:
         raise FileNotFoundError("One or more required deliverable files are missing!")
 
-    # Validate CSV schema and row count
+    # Validate CSV schema and dataset-independent row validity
     df_sub = pd.read_csv(os.path.join(output_dir, csv_file))
     print(f"\nValidating CSV format ({csv_file}):")
-    print(f"  Rows count: {len(df_sub)} (expected: 350)")
+    print(f"  Rows count: {len(df_sub)}")
     print(f"  Columns: {list(df_sub.columns)}")
-    assert len(df_sub) == 350, "CSV does not have 350 rows!"
-    assert list(df_sub.columns) == ['Test_ID', 'Predicted_Reference_Parameter', 'Validity_Label'], "CSV column headers mismatch!"
-    assert df_sub.isnull().sum().sum() == 0, "CSV contains NaN values!"
+    assert len(df_sub) > 0, f"CSV {csv_file} is empty!"
+    assert list(df_sub.columns) == ['Test_ID', 'Predicted_Reference_Parameter', 'Validity_Label'], f"CSV column headers mismatch! Found: {list(df_sub.columns)}"
+    assert df_sub['Test_ID'].isnull().sum() == 0, "Test_ID contains null values!"
+    assert (df_sub['Test_ID'].astype(str).str.strip() == '').sum() == 0, "Test_ID contains empty string values!"
+    assert df_sub['Test_ID'].duplicated().sum() == 0, f"Test_ID contains {df_sub['Test_ID'].duplicated().sum()} unexpected duplicate IDs!"
+    assert df_sub['Predicted_Reference_Parameter'].isnull().sum() == 0, "Predicted_Reference_Parameter contains NaN values!"
+    assert np.all(np.isfinite(df_sub['Predicted_Reference_Parameter'])), "Predicted_Reference_Parameter contains infinite values!"
+    assert (df_sub['Predicted_Reference_Parameter'] > 0).all(), "Predictions contain non-positive temperature rise values!"
+    assert (df_sub['Predicted_Reference_Parameter'] < 150).all(), "Predictions contain implausibly high temperature rise values (> 150°C)!"
+    assert df_sub['Validity_Label'].isin(['Valid', 'Invalid']).all(), f"Validity_Label contains invalid classes! Found: {set(df_sub['Validity_Label']) - {'Valid', 'Invalid'}}"
     print("  CSV validation passed!")
 
     # Validate JSON
@@ -55,12 +63,27 @@ def create_submission_package(team_name="og", output_dir="."):
         s_data = json.load(f)
     print(f"\nValidating Summary JSON ({summary_file}):")
     assert "number_of_records_analysed" in s_data
+    assert s_data["number_of_records_analysed"] == len(df_sub), (
+        f"Summary analysed records ({s_data['number_of_records_analysed']}) does not match prediction CSV row count ({len(df_sub)})!"
+    )
     assert "three_test_ids_requiring_highest_attention" in s_data
+    assert len(s_data["three_test_ids_requiring_highest_attention"]) == min(3, len(df_sub))
+    for tid in s_data["three_test_ids_requiring_highest_attention"]:
+        assert tid in df_sub['Test_ID'].values, f"Top attention ID '{tid}' is not present in prediction CSV!"
     assert "approach_explanation" in s_data
     words = len(s_data['approach_explanation'].split())
     print(f"  Approach explanation length: {words} words (<= 100 words requirement)")
     assert words <= 100, f"Approach explanation has {words} words, exceeds 100 word limit!"
     print("  Summary JSON validation passed!")
+
+    # Validate Summary CSV if present
+    if os.path.exists(os.path.join(output_dir, "summary.csv")):
+        df_sum_csv = pd.read_csv(os.path.join(output_dir, "summary.csv"))
+        metric_map = dict(zip(df_sum_csv['Metric'], df_sum_csv['Value']))
+        assert int(metric_map['number_of_records_analysed']) == len(df_sub), (
+            f"Summary CSV analysed records ({metric_map['number_of_records_analysed']}) does not match CSV row count ({len(df_sub)})!"
+        )
+        print("  Summary CSV validation passed!")
 
     # Create ZIP archive with deliverables enclosed in a team-named subfolder
     subfolder_name = team_name

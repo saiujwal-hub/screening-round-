@@ -1,0 +1,47 @@
+{
+    "training_confusion_matrix": {
+        "total": 1000,
+        "true_negatives": 866,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "true_positives": 134,
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0
+    },
+    "high_load_regime_verification": {
+        "high_current_records_count": 273,
+        "false_positives_in_high_current": 0,
+        "false_positive_rate": 0.0
+    },
+    "test_data_invalid_summary": {
+        "total_test_records": 350,
+        "total_invalid_identified": 46,
+        "percentage_invalid": 13.14,
+        "rule_breakdown": {
+            "Tier_5_Cross_Sensor_Violation": 33,
+            "Tier_6_Conduction_Residual_Spike": 32,
+            "Tier_4_Physical_Negative_Rise": 1,
+            "Tier_2_Missing_Sensor_Channel": 6,
+            "Tier_3_Duplicate_Operating_Vector": 8
+        },
+        "sample_invalid_test_ids": [
+            "TST-0278",
+            "TST-0264",
+            "TST-0178",
+            "TST-0213",
+            "TST-0222",
+            "TST-0008",
+            "TST-0332",
+            "TST-0277",
+            "TST-0087",
+            "TST-0283",
+            "TST-0316",
+            "TST-0168",
+            "TST-0027",
+            "TST-0031",
+            "TST-0080"
+        ]
+    }
+}

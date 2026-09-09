@@ -576,6 +576,16 @@ def train_and_predict_hotspot(df_train, df_test, models_dict):
     return preds
 
 
+def predict_reference_parameter(df_train, df_test, models_dict=None):
+    """
+    Convenience wrapper for Task 2 hotspot prediction.
+    If models_dict is not supplied, computes it via detect_anomalies.
+    """
+    if models_dict is None:
+        _, models_dict = detect_anomalies(df_train, df_test)
+    return train_and_predict_hotspot(df_train, df_test, models_dict)
+
+
 def generate_summary(df_test, predictions, validity_labels, models_dict):
     """
     Task 3: Generate Automated Test Summary

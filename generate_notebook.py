@@ -305,20 +305,20 @@ df_plot = df_train.copy()
 df_plot['S1_pred'] = lr_s1_plot.predict(df_plot[op_features].fillna(df_plot[op_features].median()))
 df_plot['S1_res'] = (df_plot['Sensor_S1'] - df_plot['S1_pred']).abs()
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 5.2), dpi=150)
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5), dpi=300)
 fig.patch.set_facecolor('#ffffff')
 
-valid_color = '#1E88E5'   # Vibrant Blue
-invalid_color = '#D81B60' # Vibrant Crimson/Coral
+valid_color = '#1976D2'
+invalid_color = '#C2185B'
 
 # Panel 1: Physical Conduction Response (Sensor S1 vs Load Current)
-ax1.set_facecolor('#fafafa')
-ax1.axvspan(85, 115, color='#FFF3E0', alpha=0.7, label='Genuine High-Current Regime (I > 85 A)')
+ax1.set_facecolor('#fcfcfc')
+ax1.axvspan(85, 115, color='#FFF8E1', alpha=0.9, zorder=0, label='High-Current Regime (I > 85 A)')
 
 ax1.scatter(
     df_plot.loc[valid_mask, 'Load_Current_A'],
     df_plot.loc[valid_mask, 'Sensor_S1'],
-    c=valid_color, alpha=0.65, s=28, edgecolors='none',
+    c=valid_color, alpha=0.55, s=24, edgecolors='none', zorder=2,
     label=f'Valid Records (n={valid_mask.sum()})'
 )
 
@@ -327,90 +327,96 @@ nan_s1_mask = invalid_s1.isnull()
 ax1.scatter(
     df_plot.loc[invalid_mask & ~nan_s1_mask, 'Load_Current_A'],
     df_plot.loc[invalid_mask & ~nan_s1_mask, 'Sensor_S1'],
-    c=invalid_color, marker='^', alpha=0.85, s=45, edgecolors='#880e4f', linewidths=0.5,
+    c=invalid_color, marker='^', alpha=0.85, s=40, edgecolors='#880e4f', linewidths=0.5, zorder=3,
     label=f'Invalid Anomalies (n={invalid_mask.sum()})'
 )
 
 if nan_s1_mask.sum() > 0:
     ax1.scatter(
         df_plot.loc[invalid_mask & nan_s1_mask, 'Load_Current_A'],
-        [-1.0] * nan_s1_mask.sum(),
-        c='#7b1fa2', marker='x', s=45, linewidths=1.5,
-        label=f'Sensor Dropouts (NaN, n={nan_s1_mask.sum()})'
+        [-2.0] * nan_s1_mask.sum(),
+        c='#6A1B9A', marker='x', s=45, linewidths=2.0, zorder=4,
+        label=f'Dropouts (NaN, n={nan_s1_mask.sum()})'
     )
 
 sorted_idx = np.argsort(df_plot.loc[valid_mask, 'Load_Current_A'])
 curr_sorted = df_plot.loc[valid_mask, 'Load_Current_A'].iloc[sorted_idx]
 pred_sorted = df_plot.loc[valid_mask, 'S1_pred'].iloc[sorted_idx]
 pred_smooth = gaussian_filter1d(pred_sorted, sigma=5)
-ax1.plot(curr_sorted, pred_smooth, color='#0d47a1', linestyle='--', linewidth=2.0, label='Physical Conduction $\\hat{S}_1$')
+ax1.plot(curr_sorted, pred_smooth, color='#0D47A1', linestyle='--', linewidth=2.2, zorder=5, label=r'Conduction $\\hat{S}_1$')
 
 ax1.annotate(
-    'High-Current Regime Shift\\n(Temperatures naturally rise to ~22°C,\\nfollows conduction physics)',
-    xy=(97, 20.5), xytext=(48, 24.5),
-    arrowprops=dict(arrowstyle="->", color='#e65100', lw=1.5),
-    fontsize=8.5, fontweight='bold', color='#bf360c',
-    bbox=dict(boxstyle="round,pad=0.3", fc="#fff3e0", ec="#ffb74d", lw=1)
+    "Extreme Sensor Spike (+28.5 °C)\\nUncoupled from load current",
+    xy=(89.2, 28.52), xytext=(52, 33.5),
+    arrowprops=dict(arrowstyle="->", color="#880e4f", lw=1.2, connectionstyle="arc3,rad=-0.1"),
+    fontsize=8, fontweight='bold', color='#880e4f',
+    bbox=dict(boxstyle="round,pad=0.25", fc="#fce4ec", ec="#f48fb1", lw=0.8),
+    zorder=6
 )
 
 ax1.annotate(
-    'Extreme Sensor Spikes\\n(Up to +28.5°C, uncoupled from load)',
-    xy=(68, 28.5), xytext=(20, 29.5),
-    arrowprops=dict(arrowstyle="->", color=invalid_color, lw=1.5),
-    fontsize=8.5, fontweight='bold', color='#880e4f',
-    bbox=dict(boxstyle="round,pad=0.3", fc="#fce4ec", ec="#f48fb1", lw=1)
+    "Genuine Regime Shift\\nJoule heating rise (I > 85 A)",
+    xy=(97, 20.8), xytext=(82, 5.0),
+    arrowprops=dict(arrowstyle="->", color="#e65100", lw=1.2, connectionstyle="arc3,rad=0.15"),
+    fontsize=8, fontweight='bold', color='#bf360c',
+    bbox=dict(boxstyle="round,pad=0.25", fc="#fff3e0", ec="#ffb74d", lw=0.8),
+    zorder=6
 )
 
-ax1.set_xlabel('Load Current [A]', fontsize=11, fontweight='bold', color='#1e293b')
-ax1.set_ylabel('Sensor S1 Temperature Rise [°C]', fontsize=11, fontweight='bold', color='#1e293b')
-ax1.set_title('(A) Thermal Response: Load Current vs. Terminal Sensor S1', fontsize=11.5, fontweight='bold', pad=10, color='#0f172a')
-ax1.set_xlim(8, 115)
-ax1.set_ylim(-2.5, 32)
-ax1.legend(loc='lower right', fontsize=8.2, framealpha=0.92, facecolor='#ffffff')
+ax1.set_xlabel('Load Current [A]', fontsize=10.5, fontweight='bold', color='#1e293b')
+ax1.set_ylabel('Sensor S1 Temperature Rise [°C]', fontsize=10.5, fontweight='bold', color='#1e293b')
+ax1.set_title('(A) Thermal Response: Load Current vs. Terminal Sensor S1', fontsize=10.5, fontweight='bold', pad=28, color='#0f172a')
+ax1.set_xlim(10, 115)
+ax1.set_ylim(-4.5, 38)
+ax1.legend(loc='lower center', bbox_to_anchor=(0.5, 1.01), ncol=3, fontsize=7.2, framealpha=0.95, facecolor='#ffffff', edgecolor='#cbd5e1')
+ax1.grid(True, linestyle=':', alpha=0.5, color='#cbd5e1')
 
 # Panel 2: Conduction Residual vs Load Current
-ax2.set_facecolor('#fafafa')
-ax2.axhspan(0, th_s1_plot, color='#E8F5E9', alpha=0.8, label=f'Permissible Conduction Tolerance ($\\leq {th_s1_plot:.2f}$ °C)')
-ax2.axhline(th_s1_plot, color='#2E7D32', linestyle='-', linewidth=1.5)
-ax2.axvspan(85, 115, color='#FFF3E0', alpha=0.4)
+ax2.set_facecolor('#fcfcfc')
+ax2.axhspan(0, th_s1_plot, color='#E8F5E9', alpha=0.85, zorder=0, label=f'Permissible Tolerance (≤ {th_s1_plot:.2f} °C)')
+ax2.axhline(th_s1_plot, color='#2E7D32', linestyle='-', linewidth=1.5, zorder=1)
+ax2.axvspan(85, 115, color='#FFF8E1', alpha=0.5, zorder=0)
 
 ax2.scatter(
     df_plot.loc[valid_mask, 'Load_Current_A'],
     df_plot.loc[valid_mask, 'S1_res'],
-    c=valid_color, alpha=0.65, s=28, edgecolors='none',
-    label='Valid Test Runs (Residuals $\\leq \\tau_{S1}$)'
+    c=valid_color, alpha=0.55, s=24, edgecolors='none', zorder=2,
+    label=r'Valid Runs (Residual $\\leq \\tau_{S1}$)'
 )
 
 valid_res_invalid_mask = invalid_mask & ~df_plot['S1_res'].isnull()
 ax2.scatter(
     df_plot.loc[valid_res_invalid_mask, 'Load_Current_A'],
     df_plot.loc[valid_res_invalid_mask, 'S1_res'],
-    c=invalid_color, marker='^', alpha=0.85, s=45, edgecolors='#880e4f', linewidths=0.5,
-    label='Invalid Anomalies (Spikes, Duplicates, Hardware Faults)'
+    c=invalid_color, marker='^', alpha=0.85, s=40, edgecolors='#880e4f', linewidths=0.5, zorder=3,
+    label='Invalid Anomalies (Spikes, Faults)'
 )
 
 ax2.annotate(
-    f'Deterministic Boundary $\\tau_{{S1}} = 1.25\\times \\max(res) = {th_s1_plot:.2f}$ °C\\n(Valid records remain bounded at all current levels)',
-    xy=(45, th_s1_plot), xytext=(12, 4.2),
-    arrowprops=dict(arrowstyle="->", color='#2e7d32', lw=1.5),
-    fontsize=8.5, fontweight='bold', color='#1b5e20',
-    bbox=dict(boxstyle="round,pad=0.3", fc="#e8f5e9", ec="#a5d6a7", lw=1)
+    f"Deterministic Boundary: $\\tau_{{S1}} = {th_s1_plot:.2f}$ °C\\n100% of valid runs strictly bounded",
+    xy=(98, th_s1_plot), xytext=(78, 4.5),
+    arrowprops=dict(arrowstyle="->", color="#2e7d32", lw=1.2),
+    fontsize=8, fontweight='bold', color='#1b5e20',
+    bbox=dict(boxstyle="round,pad=0.25", fc="#e8f5e9", ec="#a5d6a7", lw=0.8),
+    zorder=6
 )
 
 ax2.annotate(
-    'Anomalous Spike Failures\\n(Diverge up to +18.5°C across ALL load currents)',
-    xy=(82, 18.5), xytext=(22, 16.5),
-    arrowprops=dict(arrowstyle="->", color=invalid_color, lw=1.5),
-    fontsize=8.5, fontweight='bold', color='#880e4f',
-    bbox=dict(boxstyle="round,pad=0.3", fc="#fce4ec", ec="#f48fb1", lw=1)
+    "Anomalous Spike Failures\\nDiverge wildly up to +18.5 °C",
+    xy=(92.97, 18.53), xytext=(38, 14.5),
+    arrowprops=dict(arrowstyle="->", color="#880e4f", lw=1.2, connectionstyle="arc3,rad=-0.12"),
+    fontsize=8, fontweight='bold', color='#880e4f',
+    bbox=dict(boxstyle="round,pad=0.25", fc="#fce4ec", ec="#f48fb1", lw=0.8),
+    zorder=6
 )
 
-ax2.set_xlabel('Load Current [A]', fontsize=11, fontweight='bold', color='#1e293b')
-ax2.set_ylabel('Conduction Absolute Residual $|S_1 - \\hat{S}_1|$ [°C]', fontsize=11, fontweight='bold', color='#1e293b')
-ax2.set_title('(B) Conduction Residual vs. Load Current (Decoupling Physics from Defects)', fontsize=11.5, fontweight='bold', pad=10, color='#0f172a')
-ax2.set_xlim(8, 115)
-ax2.set_ylim(-0.5, 20)
-ax2.legend(loc='upper right', fontsize=8.2, framealpha=0.92, facecolor='#ffffff')
+ax2.set_xlabel('Load Current [A]', fontsize=10.5, fontweight='bold', color='#1e293b')
+ax2.set_ylabel(r'Conduction Absolute Residual $|S_1 - \\hat{S}_1|$ [°C]', fontsize=10.5, fontweight='bold', color='#1e293b')
+ax2.set_title('(B) Conduction Residual vs. Load Current (Decoupling Physics from Defects)', fontsize=10.5, fontweight='bold', pad=28, color='#0f172a')
+ax2.set_xlim(10, 115)
+ax2.set_ylim(-0.8, 22)
+ax2.legend(loc='lower center', bbox_to_anchor=(0.5, 1.01), ncol=3, fontsize=7.2, framealpha=0.95, facecolor='#ffffff', edgecolor='#cbd5e1')
+ax2.grid(True, linestyle=':', alpha=0.5, color='#cbd5e1')
 
 plt.tight_layout()
 plt.savefig("task1_regime_vs_anomaly.png", dpi=300, bbox_inches='tight')

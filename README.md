@@ -47,9 +47,11 @@ This repository contains the complete, reproducible end-to-end engineering solut
 ├── summary.json                                      # Task 3 automated executive summary
 ├── solution_pipeline.py                              # Fully autonomous CLI pipeline
 ├── solution_notebook.ipynb                           # Pre-rendered interactive Jupyter notebook
-├── methodology_note.md                               # Comprehensive 2-page engineering note
+├── methodology_note.md                               # Concise 2-page engineering note (796 words)
+├── methodology_note.pdf                              # Verified 2-page PDF deliverable
+├── export_pdf.py                                     # PDF generator & page-count verifier script
 ├── package_submission.py                             # Deliverable validation and packaging script
-├── powernext-alpha-submission.zip                    # Ready-to-upload ZIP package for Unstop
+├── powernext-alpha-submission.zip                    # Ready-to-upload ZIP package for Unstop (enclosing PowerNext_Alpha/)
 └── README.md                                         # Project documentation
 ```
 

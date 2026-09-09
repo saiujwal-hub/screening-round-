@@ -18,8 +18,9 @@ def create_submission_package(team_name="powernext-alpha", output_dir="."):
     script_file = "solution_pipeline.py"
     notebook_file = "solution_notebook.ipynb"
     methodology_file = "methodology_note.md"
-
     files_to_pack = [csv_file, summary_file, script_file, notebook_file, methodology_file]
+    if os.path.exists(os.path.join(output_dir, "methodology_note.pdf")):
+        files_to_pack.append("methodology_note.pdf")
 
     print(f"=== Validating Submission Deliverables for '{team_name}' ===")
     all_present = True
@@ -57,19 +58,23 @@ def create_submission_package(team_name="powernext-alpha", output_dir="."):
     assert words <= 100, f"Approach explanation has {words} words, exceeds 100 word limit!"
     print("  Summary JSON validation passed!")
 
-    # Create ZIP archive
+    # Create ZIP archive with deliverables enclosed in a team-named subfolder
+    subfolder_name = "PowerNext_Alpha"
     zip_filename = os.path.join(output_dir, f"{team_name}-submission.zip")
     with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for fname in files_to_pack:
-            zipf.write(os.path.join(output_dir, fname), arcname=fname)
+            file_path = os.path.join(output_dir, fname)
+            arcname = f"{subfolder_name}/{fname}"
+            zipf.write(file_path, arcname=arcname)
 
     zip_size_kb = os.path.getsize(zip_filename) / 1024.0
     print(f"\n=== Submission Package Created Successfully ===")
     print(f"Archive: {zip_filename} ({zip_size_kb:.1f} KB)")
+    print(f"Enclosed directory: '{subfolder_name}/'")
     print("Contents:")
     with zipfile.ZipFile(zip_filename, 'r') as zipf:
         for item in zipf.infolist():
-            print(f"  - {item.filename:30s} ({item.file_size / 1024.0:.1f} KB)")
+            print(f"  - {item.filename:35s} ({item.file_size / 1024.0:.1f} KB)")
 
 
 if __name__ == "__main__":

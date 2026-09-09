@@ -17,12 +17,23 @@ import tempfile
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import GradientBoostingRegressor
-import xgboost as xgb
-import lightgbm as lgb
+from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor, RandomForestRegressor
+try:
+    import xgboost as xgb
+    HAS_XGB = True
+except ImportError:
+    HAS_XGB = False
+
+try:
+    import lightgbm as lgb
+    HAS_LGB = True
+except ImportError:
+    HAS_LGB = False
 from sklearn.model_selection import KFold
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
+
+DEFAULT_DATASET_PATH = "CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx"
 
 REQUIRED_SHEETS = ['Training_Data', 'Test_Data']
 REQUIRED_TRAIN_COLUMNS = [
@@ -34,6 +45,52 @@ REQUIRED_TEST_COLUMNS = [
     'Test_ID', 'Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C',
     'Test_Duration_min', 'Sensor_S1', 'Sensor_S2', 'Sensor_S3'
 ]
+
+COLUMN_ALIASES = {
+    'applied_voltage': 'Applied_Voltage_kV',
+    'applied_voltage_kv': 'Applied_Voltage_kV',
+    'applied_voltage_in_kv': 'Applied_Voltage_kV',
+    'load_current': 'Load_Current_A',
+    'load_current_a': 'Load_Current_A',
+    'load_current_in_a': 'Load_Current_A',
+    'ambient_temperature': 'Ambient_Temperature_C',
+    'ambient_temperature_c': 'Ambient_Temperature_C',
+    'ambient_temperature_deg_c': 'Ambient_Temperature_C',
+    'ambient_temp': 'Ambient_Temperature_C',
+    'ambient_temp_c': 'Ambient_Temperature_C',
+    'test_duration': 'Test_Duration_min',
+    'test_duration_min': 'Test_Duration_min',
+    'test_duration_in_min': 'Test_Duration_min',
+    'duration': 'Test_Duration_min',
+    'sensor_s1': 'Sensor_S1',
+    's1': 'Sensor_S1',
+    'sensor_s2': 'Sensor_S2',
+    's2': 'Sensor_S2',
+    'sensor_s3': 'Sensor_S3',
+    's3': 'Sensor_S3',
+    'sensor_s4': 'Sensor_S4',
+    's4': 'Sensor_S4',
+    'reference_parameter': 'Reference_Parameter',
+    'predicted_reference_parameter': 'Predicted_Reference_Parameter',
+    'validity_label': 'Validity_Label',
+    'valid_invalid': 'Validity_Label',
+    'test_id': 'Test_ID',
+}
+
+
+def standardize_columns(df):
+    """
+    Standardizes column names by stripping whitespace, ignoring case/units,
+    and mapping known variations (e.g. 'Applied_Voltage' -> 'Applied_Voltage_kV').
+    """
+    rename_dict = {}
+    for col in df.columns:
+        norm = str(col).strip().lower().replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_')
+        if norm in COLUMN_ALIASES:
+            rename_dict[col] = COLUMN_ALIASES[norm]
+    if rename_dict:
+        df = df.rename(columns=rename_dict)
+    return df
 
 
 def validate_schema(df_train, df_test, source_desc=""):
@@ -65,37 +122,95 @@ def validate_schema(df_train, df_test, source_desc=""):
 def load_data(file_path):
     """
     Loads and strictly validates training and test datasets from Excel or CSV format.
-    Fails loudly and diagnosably if required sheets or columns are missing.
+    Resilient to single-sheet unseen test workbooks, custom filenames, or separate CSV files.
+    Fails loudly and diagnosably if required columns are missing.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Specified dataset path does not exist: '{file_path}'")
 
+    default_excel = DEFAULT_DATASET_PATH if os.path.exists(DEFAULT_DATASET_PATH) else None
+
     if file_path.endswith('.xlsx') or file_path.endswith('.xls'):
         try:
             with pd.ExcelFile(file_path) as xl:
-                missing_sheets = [s for s in REQUIRED_SHEETS if s not in xl.sheet_names]
-                if missing_sheets:
-                    raise ValueError(
-                        f"Excel workbook schema error in '{file_path}': Missing required sheet(s): {missing_sheets}.\n"
-                        f"  Expected sheets: {REQUIRED_SHEETS}\n"
-                        f"  Found sheets:    {xl.sheet_names}"
-                    )
-                df_train = pd.read_excel(xl, sheet_name='Training_Data')
-                df_test = pd.read_excel(xl, sheet_name='Test_Data')
+                sheet_names_lower = {s.lower(): s for s in xl.sheet_names}
+
+                # Case 1: Both Training_Data and Test_Data are present
+                if 'training_data' in sheet_names_lower and 'test_data' in sheet_names_lower:
+                    df_train = pd.read_excel(xl, sheet_name=sheet_names_lower['training_data'])
+                    df_test = pd.read_excel(xl, sheet_name=sheet_names_lower['test_data'])
+                # Case 2: Only Test_Data present (unseen test workbook)
+                elif 'test_data' in sheet_names_lower:
+                    df_test = pd.read_excel(xl, sheet_name=sheet_names_lower['test_data'])
+                    if default_excel:
+                        df_train = pd.read_excel(default_excel, sheet_name='Training_Data')
+                    else:
+                        raise ValueError(f"Cannot load training baseline: 'Training_Data' sheet missing in '{file_path}' and default '{DEFAULT_DATASET_PATH}' not found.")
+                # Case 3: Single-sheet workbook passed as unseen test set
+                elif len(xl.sheet_names) == 1:
+                    df_test = pd.read_excel(xl, sheet_name=xl.sheet_names[0])
+                    if default_excel:
+                        df_train = pd.read_excel(default_excel, sheet_name='Training_Data')
+                    else:
+                        raise ValueError(f"Cannot load training baseline for single-sheet test file '{file_path}'.")
+                else:
+                    test_sheets = [s for s in xl.sheet_names if 'test' in s.lower()]
+                    train_sheets = [s for s in xl.sheet_names if 'train' in s.lower()]
+                    if test_sheets:
+                        df_test = pd.read_excel(xl, sheet_name=test_sheets[0])
+                    else:
+                        df_test = pd.read_excel(xl, sheet_name=xl.sheet_names[0])
+                    if train_sheets:
+                        df_train = pd.read_excel(xl, sheet_name=train_sheets[0])
+                    elif default_excel:
+                        df_train = pd.read_excel(default_excel, sheet_name='Training_Data')
+                    else:
+                        raise ValueError(f"Unable to resolve training and test sheets in '{file_path}'. Found: {xl.sheet_names}")
         except ValueError:
             raise
         except Exception as e:
             raise ValueError(f"Unable to read Excel workbook '{file_path}': {e}")
     else:
         # Fallback if directory or CSV path provided
-        train_path = os.path.join(file_path, 'training_data.csv') if os.path.isdir(file_path) else file_path
-        test_path = os.path.join(file_path, 'test_data.csv') if os.path.isdir(file_path) else file_path
-        if not os.path.exists(train_path) or not os.path.exists(test_path):
-            raise FileNotFoundError(
-                f"CSV dataset paths not found. Expected 'training_data.csv' and 'test_data.csv' inside '{file_path}'"
-            )
-        df_train = pd.read_csv(train_path)
-        df_test = pd.read_csv(test_path)
+        if os.path.isdir(file_path):
+            train_path = os.path.join(file_path, 'training_data.csv')
+            test_path = os.path.join(file_path, 'test_data.csv')
+            if not os.path.exists(test_path):
+                csvs = [f for f in os.listdir(file_path) if f.endswith('.csv')]
+                if not csvs:
+                    raise FileNotFoundError(f"No CSV files found inside directory '{file_path}'")
+                test_path = os.path.join(file_path, csvs[0])
+            df_test = pd.read_csv(test_path)
+            if os.path.exists(train_path):
+                df_train = pd.read_csv(train_path)
+            elif default_excel:
+                df_train = pd.read_excel(default_excel, sheet_name='Training_Data')
+            else:
+                raise FileNotFoundError(f"Training data not found in '{file_path}' or '{DEFAULT_DATASET_PATH}'")
+        else:
+            # Single CSV file provided
+            df_input = pd.read_csv(file_path)
+            df_input_std = standardize_columns(df_input.copy())
+            if 'Reference_Parameter' in df_input_std.columns and 'Validity_Label' in df_input_std.columns:
+                df_train = df_input
+                test_path = os.path.join(os.path.dirname(file_path) or '.', 'test_data.csv')
+                if os.path.exists(test_path):
+                    df_test = pd.read_csv(test_path)
+                elif default_excel:
+                    df_test = pd.read_excel(default_excel, sheet_name='Test_Data')
+                else:
+                    raise FileNotFoundError(f"Test data not found alongside '{file_path}'")
+            else:
+                # Provided CSV is unseen test data
+                df_test = df_input
+                if default_excel:
+                    df_train = pd.read_excel(default_excel, sheet_name='Training_Data')
+                else:
+                    raise FileNotFoundError(f"Cannot load baseline training data for test CSV '{file_path}'")
+
+    # Standardize column naming variations across both datasets
+    df_train = standardize_columns(df_train)
+    df_test = standardize_columns(df_test)
 
     # Perform column schema verification
     validate_schema(df_train, df_test, source_desc=file_path)
@@ -430,20 +545,34 @@ def train_and_predict_hotspot(df_train, df_test, models_dict):
     y_train = train_fe.loc[valid_idx, 'Reference_Parameter']
     X_test = test_fe[feature_cols]
 
-    # Model 1: Gradient Boosting
+    models = []
+    # Model 1: Gradient Boosting (scikit-learn)
     m1 = GradientBoostingRegressor(n_estimators=300, max_depth=4, learning_rate=0.03, random_state=42)
     m1.fit(X_train, y_train)
+    models.append(m1)
 
-    # Model 2: XGBoost
-    m2 = xgb.XGBRegressor(n_estimators=300, max_depth=4, learning_rate=0.03, random_state=42)
-    m2.fit(X_train, y_train)
+    # Model 2: XGBoost if installed, else HistGradientBoostingRegressor
+    if HAS_XGB:
+        m2 = xgb.XGBRegressor(n_estimators=300, max_depth=4, learning_rate=0.03, random_state=42)
+        m2.fit(X_train, y_train)
+        models.append(m2)
+    else:
+        m2 = HistGradientBoostingRegressor(max_iter=300, max_depth=4, learning_rate=0.03, random_state=42)
+        m2.fit(X_train, y_train)
+        models.append(m2)
 
-    # Model 3: LightGBM
-    m3 = lgb.LGBMRegressor(n_estimators=300, max_depth=4, learning_rate=0.03, random_state=42, verbose=-1)
-    m3.fit(X_train, y_train)
+    # Model 3: LightGBM if installed, else RandomForestRegressor
+    if HAS_LGB:
+        m3 = lgb.LGBMRegressor(n_estimators=300, max_depth=4, learning_rate=0.03, random_state=42, verbose=-1)
+        m3.fit(X_train, y_train)
+        models.append(m3)
+    else:
+        m3 = RandomForestRegressor(n_estimators=300, max_depth=8, random_state=42)
+        m3.fit(X_train, y_train)
+        models.append(m3)
 
     # Blended ensemble prediction
-    preds = (m1.predict(X_test) + m2.predict(X_test) + m3.predict(X_test)) / 3.0
+    preds = np.mean([m.predict(X_test) for m in models], axis=0)
     return preds
 
 
@@ -493,7 +622,7 @@ def generate_summary(df_test, predictions, validity_labels, models_dict):
     top_3_test_ids = [str(top_thermal_id), str(top_sensor_fail_id), str(top_dropout_id)]
 
     explanation = (
-        "We adopted a physics-grounded ML strategy. Task 1 implemented a three-tier deterministic filter separating "
+        "We adopted a physics-grounded ML strategy. Task 1 implemented a multi-tier physics-grounded filter separating "
         "physical regime shifts from anomalies by identifying missing values, test duplicates, and thermal residual "
         "outliers (>1.25x baseline error). For Task 2, physical sensor values were reconstructed where corrupted, and an "
         "ensemble of Gradient Boosting, XGBoost, and LightGBM was trained on Joule heating (I^2) and thermal conduction "
@@ -591,14 +720,31 @@ def run_pipeline(data_path, team_name="PowerNext_Alpha", output_dir=".", verbose
         submission_df.to_csv(csv_filename, index=False)
         if verbose: print(f"  Generated submission CSV: {csv_filename} ({len(submission_df)} rows)")
 
-        # 5. Task 3: Generate Summary JSON
+        # 5. Task 3: Generate Summary JSON and CSV
         if verbose: print("\n[4/4] Executing Task 3: Generating Automated Test Summary...")
         summary_data = generate_summary(df_test, predictions, validity_labels, models_dict)
         summary_filename = os.path.join(output_dir, "summary.json")
         with open(summary_filename, 'w') as f:
             json.dump(summary_data, f, indent=4)
+        
+        # Dual format export for full compliance with "summary.json or summary.csv"
+        summary_csv_filename = os.path.join(output_dir, "summary.csv")
+        summary_rows = [
+            {"Metric": "number_of_records_analysed", "Value": summary_data["number_of_records_analysed"]},
+            {"Metric": "number_of_valid_records", "Value": summary_data["number_of_valid_records"]},
+            {"Metric": "number_of_abnormal_invalid_records_identified", "Value": summary_data["number_of_abnormal_invalid_records_identified"]},
+            {"Metric": "percentage_abnormal", "Value": summary_data["percentage_abnormal"]},
+            {"Metric": "minimum_predicted_reference_parameter", "Value": summary_data["minimum_predicted_reference_parameter"]},
+            {"Metric": "maximum_predicted_reference_parameter", "Value": summary_data["maximum_predicted_reference_parameter"]},
+            {"Metric": "average_predicted_reference_parameter", "Value": summary_data["average_predicted_reference_parameter"]},
+            {"Metric": "three_test_ids_requiring_highest_attention", "Value": ", ".join(summary_data["three_test_ids_requiring_highest_attention"])},
+            {"Metric": "approach_explanation", "Value": summary_data["approach_explanation"]}
+        ]
+        pd.DataFrame(summary_rows).to_csv(summary_csv_filename, index=False)
+
         if verbose:
             print(f"  Generated summary JSON: {summary_filename}")
+            print(f"  Generated summary CSV:  {summary_csv_filename}")
             print(f"  Top 3 Attention Test IDs: {summary_data['three_test_ids_requiring_highest_attention']}")
             word_count = len(summary_data['approach_explanation'].split())
             print(f"  Explanation word count: {word_count} words (limit: 100 words)")
@@ -742,6 +888,8 @@ def run_stress_test(data_path, team_name="PowerNext_Alpha_StressTest"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PowerNext-AI Screening Solution Pipeline")
+    parser.add_argument("data_path_pos", nargs="?", default=None,
+                        help="Optional positional path to participant dataset Excel or folder")
     parser.add_argument("--data-path", type=str, default="CPRI_Hackathon_Screening_Dataset_PARTICIPANT.xlsx",
                         help="Path to participant dataset Excel or folder")
     parser.add_argument("--team-name", type=str, default="PowerNext_Alpha",
@@ -752,7 +900,9 @@ if __name__ == "__main__":
                         help="Execute synthetic robustness stress test on perturbed inputs")
 
     args = parser.parse_args()
+    data_path = args.data_path_pos if args.data_path_pos else args.data_path
+
     if args.stress_test:
-        run_stress_test(args.data_path, team_name=f"{args.team_name}_StressTest")
+        run_stress_test(data_path, team_name=f"{args.team_name}_StressTest")
     else:
-        run_pipeline(args.data_path, args.team_name, args.output_dir)
+        run_pipeline(data_path, args.team_name, args.output_dir)

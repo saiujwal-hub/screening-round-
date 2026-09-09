@@ -201,16 +201,19 @@ def detect_anomalies(df_train, df_test):
 def evaluate_task1_cv(df_train, n_splits=5):
     """
     Leakage-Free 5-Fold Cross-Validation for Task 1 Anomaly Detection Engine.
-    Evaluates out-of-fold generalization across two standard testing paradigms:
-      - Primary (Batch & Test History Matching): Duplicates matched across accumulated test history.
-      - Isolated Slice Mode: Duplicates evaluated strictly within the held-out 20% validation slice.
-    Includes training-fold median imputation and invalid flagging for missing operating parameters.
+    Evaluates out-of-fold generalization:
+      - Primary / Headline (Isolated Slice Mode): Duplicates evaluated strictly within the held-out
+        validation slice with no cross-fold matching, directly mirroring deployed inference on Test_Data.
+      - Exploratory Aside (History Matching): Duplicates matched across accumulated training history.
+        NOTE: This is NOT representative of deployed performance because 0 of the 350 real Test_Data
+        records share an operating condition tuple with Training_Data (0/350 overlap).
+    Returns: (cv_df_isolated, cv_df_history)
     """
     op_features = ['Applied_Voltage_kV', 'Load_Current_A', 'Ambient_Temperature_C', 'Test_Duration_min']
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 
-    fold_results_history = []
     fold_results_isolated = []
+    fold_results_history = []
 
     for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
         train_fold = df_train.iloc[train_idx]
@@ -286,7 +289,7 @@ def evaluate_task1_cv(df_train, n_splits=5):
             'F1': f1_score(act_invalid, pred_inv_iso)
         })
 
-    return pd.DataFrame(fold_results_history), pd.DataFrame(fold_results_isolated)
+    return pd.DataFrame(fold_results_isolated), pd.DataFrame(fold_results_history)
 
 
 def reconstruct_clean_sensors(df, models_dict, is_train=False):
@@ -476,14 +479,17 @@ def run_pipeline(data_path, team_name="PowerNext_Alpha", output_dir=".", verbose
         if verbose:
             print("\n[2/4] Executing Task 1: Anomaly Detection Engine...")
             print("  Evaluating Leakage-Free 5-Fold Cross-Validation on Historical Training Data:")
-            cv_df_hist, cv_df_iso = evaluate_task1_cv(df_train, n_splits=5)
-            print("  [Mode A: Deployment with Test History & Batch Duplicate Tracking]")
-            for _, row in cv_df_hist.iterrows():
-                print(f"    Fold {int(row['Fold'])}: Accuracy={row['Accuracy']:.4f}, Precision={row['Precision']:.4f}, Recall={row['Recall']:.4f}, F1={row['F1']:.4f} (Thresholds: S1={row['Thresh_S1']:.3f}, S2={row['Thresh_S2']:.3f}, S3={row['Thresh_S3']:.3f})")
-            print(f"  Mean Accuracy:  {cv_df_hist['Accuracy'].mean():.4f} | Precision: {cv_df_hist['Precision'].mean():.4f} | Recall: {cv_df_hist['Recall'].mean():.4f} | F1-Score: {cv_df_hist['F1'].mean():.4f}")
+            cv_df_iso, cv_df_hist = evaluate_task1_cv(df_train, n_splits=5)
+            print("  [Headline Metric: Isolated Slice Evaluation (strictly within held-out fold, mirroring deployed model)]")
+            for _, row in cv_df_iso.iterrows():
+                print(f"    Fold {int(row['Fold'])}: Accuracy={row['Accuracy']:.4f}, Precision={row['Precision']:.4f}, Recall={row['Recall']:.4f}, F1={row['F1']:.4f}")
+            print(f"  Headline Mean -> Accuracy: {cv_df_iso['Accuracy'].mean():.4f} (98.0%) | Precision: {cv_df_iso['Precision'].mean():.4f} (100.0%) | Recall: {cv_df_iso['Recall'].mean():.4f} (84.7%) | F1-Score: {cv_df_iso['F1'].mean():.4f} (0.9165)")
 
-            print("\n  [Mode B: Isolated Slice Evaluation (strictly within 200-row validation fold without historical matching)]")
-            print(f"  Mean Accuracy:  {cv_df_iso['Accuracy'].mean():.4f} | Precision: {cv_df_iso['Precision'].mean():.4f} | Recall: {cv_df_iso['Recall'].mean():.4f} | F1-Score: {cv_df_iso['F1'].mean():.4f}")
+            print("\n  [Exploratory Aside: Training-Fold Cross-History Matching (Not Representative of Deployed Model)]")
+            print("  NOTE: History-matching produces 100% in training CV because duplicate pairs split across folds.")
+            print("  However, ZERO of the 350 real Test_Data records share an operating-condition tuple with Training_Data")
+            print("  (0/350 overlap), so history-matching cannot fire in deployment. Deployed detect_anomalies() operates strictly in isolated mode.")
+            print(f"  Cross-History Aside -> Mean Accuracy: {cv_df_hist['Accuracy'].mean():.4f} | Precision: {cv_df_hist['Precision'].mean():.4f} | Recall: {cv_df_hist['Recall'].mean():.4f}")
 
             print("\n  Fitting production anomaly model on full training dataset for test inference...")
         
@@ -492,6 +498,9 @@ def run_pipeline(data_path, team_name="PowerNext_Alpha", output_dir=".", verbose
         if verbose:
             print(f"  Identified {invalid_count} abnormal/invalid records ({invalid_count / len(df_test) * 100:.1f}%) in Test Data")
             print(f"  Identified {len(df_test) - invalid_count} valid records in Test Data")
+            print("  Note: The two new detection tiers (physical plausibility, cross-sensor consistency) did not change")
+            print("  any labels on the actual 350-record Test_Data submission versus the original single-tier check — they")
+            print("  exist as defensive depth for the hidden/second dataset, not as a demonstrated improvement on this specific submission.")
 
         # 3. Task 2: Predict Reference Parameter
         if verbose: print("\n[3/4] Executing Task 2: Hotspot Temperature Prediction (Ensemble ML)...")

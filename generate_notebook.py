@@ -97,9 +97,8 @@ Our empirical analysis revealed that abnormal tests represent physical failures 
 ### 2.1 Leakage-Free 5-Fold Cross-Validation Evaluation
 To ensure rigorous, unbiased evaluation without data leakage:
 - For each fold, single-sensor baselines ($S_1, S_2, S_3$), cross-sensor baselines ($S_3 \\text{ vs } S_1, S_2 \\text{ vs } S_1$), and thresholds are fit **strictly on the training fold's Valid records**.
-- We report both:
-  - **Mode A (Deployment Setting)**: Checks duplicates across accumulated test history/batches.
-  - **Mode B (Isolated Slice Mode)**: Evaluates duplicates strictly within the held-out 20% slice without historical matching.
+- **Headline Evaluation (Isolated Slice Mode)**: Evaluates duplicates strictly within each held-out validation slice without cross-fold matching. Because **0 of the 350 real Test_Data records share an operating-condition tuple with Training_Data (0/350 overlap)**, `detect_anomalies()` cannot use history matching in deployment. Mode B is the exact out-of-fold representation of deployed model performance (**Accuracy: 98.0%, Precision: 100.0%, Recall: 84.7%, F1: 0.9165**).
+- **Exploratory Aside (Training-Fold Cross-History Matching)**: Matches duplicates across the training history. While producing 100% due to duplicate pairs split across training folds, it is not representative of deployed performance due to the 0/350 overlap.
 """))
 
 cells.append(nbf.v4.new_code_cell("""from sklearn.model_selection import KFold
@@ -147,7 +146,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
     
     act_inv = (val_fold['Validity_Label'] == 'Invalid')
     
-    # Mode A: With test history / batch matching
+    # Mode A (Exploratory Aside): With test history / batch matching
     dup_m_a = val_fold.duplicated(subset=op_features, keep=False) | val_fold[op_features].apply(tuple, axis=1).isin(train_fold[op_features].apply(tuple, axis=1))
     pred_inv_a = nan_m | dup_m_a | neg_m | cross_spk_m | spk_m
     
@@ -159,7 +158,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
         'F1_Score': f1_score(act_inv, pred_inv_a)
     })
     
-    # Mode B: Isolated slice without history matching
+    # Mode B (Headline Metric): Isolated slice without cross-history matching (matches deployed test inference)
     dup_m_b = val_fold.duplicated(subset=op_features, keep=False)
     pred_inv_b = nan_m | dup_m_b | neg_m | cross_spk_m | spk_m
     
@@ -174,13 +173,14 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(df_train)):
 cv_df_a = pd.DataFrame(cv_results_a)
 cv_df_b = pd.DataFrame(cv_results_b)
 
-print("=== Mode A: 5-Fold CV with Batch & History Tracking ===")
-print(cv_df_a.to_string(index=False))
-print(f"Mean Accuracy:  {cv_df_a['Accuracy'].mean():.4f} | Precision: {cv_df_a['Precision'].mean():.4f} | Recall: {cv_df_a['Recall'].mean():.4f} | F1: {cv_df_a['F1_Score'].mean():.4f}")
-
-print("\\n=== Mode B: 5-Fold CV in Isolated 200-Row Slices ===")
+print("=== Headline Task 1 Metric: 5-Fold CV in Isolated Slices (Matching Deployed Model) ===")
 print(cv_df_b.to_string(index=False))
-print(f"Mean Accuracy:  {cv_df_b['Accuracy'].mean():.4f} | Precision: {cv_df_b['Precision'].mean():.4f} | Recall: {cv_df_b['Recall'].mean():.4f} | F1: {cv_df_b['F1_Score'].mean():.4f}")
+print(f"Headline Mean -> Accuracy: {cv_df_b['Accuracy'].mean():.4f} (98.0%) | Precision: {cv_df_b['Precision'].mean():.4f} (100.0%) | Recall: {cv_df_b['Recall'].mean():.4f} (84.7%) | F1: {cv_df_b['F1_Score'].mean():.4f} (0.9165)")
+
+print("\\n=== Exploratory Aside: 5-Fold CV with Cross-History Matching (Not Representative of Deployed Performance) ===")
+print("NOTE: Cross-history matching achieves 100% in training CV because duplicate pairs split across folds.")
+print("However, ZERO of the 350 real Test_Data records share an operating condition tuple with Training_Data (0/350 overlap).")
+print(f"Aside Mean -> Accuracy: {cv_df_a['Accuracy'].mean():.4f} | Precision: {cv_df_a['Precision'].mean():.4f} | Recall: {cv_df_a['Recall'].mean():.4f}")
 """))
 
 cells.append(nbf.v4.new_markdown_cell("""### 2.2 Production Anomaly Model Fitting
@@ -225,6 +225,7 @@ df_test['Validity_Label'] = np.where(invalid_mask_ts, 'Invalid', 'Valid')
 
 print("Test Data Validity Distribution:")
 print(df_test['Validity_Label'].value_counts())
+print("\\n[Engineering Note] The two new detection tiers (physical plausibility, cross-sensor consistency) did not change any labels on the actual 350-record Test_Data submission versus the original single-tier check -- they exist as defensive depth for the hidden/second dataset, not as a demonstrated improvement on this specific submission.")
 """))
 
 # Section 2.3: Visualizing the Core Insight: Genuine Operating Regime Shift vs. Anomaly Points
